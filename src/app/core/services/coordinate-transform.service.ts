@@ -1,0 +1,1 @@
+// Servicio para convertir DB coords → 3D

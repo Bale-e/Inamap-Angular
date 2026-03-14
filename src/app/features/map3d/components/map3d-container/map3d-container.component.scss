@@ -1,0 +1,13 @@
+:host {
+  display: block;
+  width: 100%;
+  height: 100vh;
+  touch-action: none; /* Prevents touch gestures from interfering with 3D camera */
+}
+
+#renderCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background-color: #000; /* Extra safeguard */
+}

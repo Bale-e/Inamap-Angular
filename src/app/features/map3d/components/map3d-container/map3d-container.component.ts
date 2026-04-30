@@ -1,7 +1,6 @@
 ﻿import { Component, AfterViewInit, OnDestroy, ElementRef, ViewChild } from '@angular/core';
 import * as BABYLON from 'babylonjs';
 import 'babylonjs-loaders';
-import * as BabylonLoaders from 'babylonjs-loaders';
 import { HttpClient } from '@angular/common/http';
 
 @Component({
@@ -25,13 +24,12 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private ensureLoaders(): void {
-    try {
-      const OBJLoader = (BabylonLoaders as any).OBJFileLoader;
-      if (OBJLoader && !BABYLON.SceneLoader.IsPluginForExtensionAvailable('.obj')) {
-        BABYLON.SceneLoader.RegisterPlugin(new OBJLoader());
-      }
-    } catch (e) {
-      console.warn('No se pudo registrar OBJ loader manualmente:', e);
+    // Los loaders se registran automáticamente al importar 'babylonjs-loaders'
+    // Verificar que el plugin OBJ esté disponible
+    if (!BABYLON.SceneLoader.IsPluginForExtensionAvailable('.obj')) {
+      console.warn('OBJ loader no está disponible');
+    } else {
+      console.log('✅ OBJ Loader disponible');
     }
   }
 
@@ -130,8 +128,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private async load3dModel(): Promise<void> {
     if (!this.scene) return;
 
-    const modelRoot = '/assets/3d-models/';
-    const modelName = 'Edificio-a.obj';
+    const modelRoot = '/assets/3d-models/Edificio%20A/';
+    const modelName = 'Piso 1.obj';
 
     try {
       const result = await BABYLON.SceneLoader.ImportMeshAsync('', modelRoot, modelName, this.scene);

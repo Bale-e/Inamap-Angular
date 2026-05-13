@@ -10,7 +10,7 @@ jspm_packages/
 bower_components/
 
 # --- Caché de Angular ---
-.angular/cache/
+.angular/*
 
 # --- Archivos de IDEs/Editores ---
 .vscode/

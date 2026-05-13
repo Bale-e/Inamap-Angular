@@ -208,8 +208,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
     if (!this.scene) return;
 
-    const modelRoot = '/assets/3d-models/Edificio%20A/';
-    const modelName = 'Piso 1.obj';
+    const modelRoot = '/assets/3d-models/Edificio A/';
+    const modelName = 'Edifico A - Piso 1.obj';
 
     try {
 

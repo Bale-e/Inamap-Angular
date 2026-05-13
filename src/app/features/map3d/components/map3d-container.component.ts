@@ -1,4 +1,4 @@
-﻿import { Component, AfterViewInit, OnDestroy, ElementRef, ViewChild } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ElementRef, ViewChild } from '@angular/core';
 import * as BABYLON from 'babylonjs';
 import 'babylonjs-loaders';
 import { HttpClient } from '@angular/common/http';
@@ -19,21 +19,21 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private scene: BABYLON.Scene | null = null;
   private camera: BABYLON.ArcRotateCamera | null = null;
   private renderLoopFn: (() => void) | null = null;
+  private bannerControlsAttached = false;
 
   constructor(private http: HttpClient) {}
 
   ngAfterViewInit(): void {
     this.ensureLoaders();
+    this.attachBannerControls();
   }
 
   private ensureLoaders(): void {
-
     if (!BABYLON.SceneLoader.IsPluginForExtensionAvailable('.obj')) {
       console.warn('OBJ loader no está disponible');
     } else {
       console.log('✅ OBJ Loader disponible');
     }
-
   }
 
   ngOnDestroy(): void {
@@ -41,58 +41,75 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   setView(mode: '2d' | '3d'): void {
-
     if (this.viewMode === mode) return;
 
     if (mode === '3d') {
-
       this.viewMode = '3d';
-
       setTimeout(() => {
         this.init3dScene();
       }, 0);
-
     } else {
-
       this.dispose3d();
       this.viewMode = '2d';
-
     }
 
+    this.updateBannerButtons();
+  }
+
+  private attachBannerControls(): void {
+    if (this.bannerControlsAttached) {
+      return;
+    }
+
+    const view2DBtn = document.getElementById('view2DBtn');
+    const view3DBtn = document.getElementById('view3DBtn');
+
+    if (view2DBtn) {
+      view2DBtn.addEventListener('click', () => this.setView('2d'));
+    }
+
+    if (view3DBtn) {
+      view3DBtn.addEventListener('click', () => this.setView('3d'));
+    }
+
+    this.bannerControlsAttached = true;
+    this.updateBannerButtons();
+  }
+
+  private updateBannerButtons(): void {
+    const view2DBtn = document.getElementById('view2DBtn') as HTMLButtonElement | null;
+    const view3DBtn = document.getElementById('view3DBtn') as HTMLButtonElement | null;
+
+    if (view2DBtn) {
+      view2DBtn.disabled = this.viewMode === '2d';
+    }
+
+    if (view3DBtn) {
+      view3DBtn.disabled = this.viewMode === '3d';
+    }
   }
 
   zoomIn(): void {
-
     if (this.camera) {
-
       const newRadius = this.camera.radius * 0.85;
-
       this.camera.radius = Math.max(
         newRadius,
         this.camera.lowerRadiusLimit ?? 1
       );
-
     }
-
   }
 
   zoomOut(): void {
-
     if (this.camera) {
-
       const newRadius = this.camera.radius * 1.15;
-
       this.camera.radius = Math.min(
         newRadius,
         this.camera.upperRadiusLimit ?? 500
       );
-
     }
-
   }
 
   private init3dScene(): void {
-
     this.dispose3d();
 
     const canvasContainer = this.renderCanvasContainer?.nativeElement;
@@ -162,57 +179,43 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.load3dModel();
 
     this.renderLoopFn = () => {
-
       if (this.scene) {
         this.scene.render();
       }
-
     };
 
     this.engine.runRenderLoop(this.renderLoopFn);
 
     window.addEventListener('resize', this.onResize);
-
   }
 
   private onResize = (): void => {
-
     if (this.engine) {
       this.engine.resize();
     }
-
   };
 
   private dispose3d(): void {
-
     if (this.engine) {
-
       window.removeEventListener('resize', this.onResize);
-
       this.engine.stopRenderLoop();
-
       this.engine.dispose();
-
       this.engine = null;
       this.scene = null;
-
     }
 
     if (this.renderCanvasContainer?.nativeElement) {
       this.renderCanvasContainer.nativeElement.innerHTML = '';
     }
-
   }
 
   private async load3dModel(): Promise<void> {
-
     if (!this.scene) return;
 
     const modelRoot = '/assets/3d-models/Edificio A/';
     const modelName = 'Edifico A - Piso 1.obj';
 
     try {
-
       const result = await BABYLON.SceneLoader.ImportMeshAsync(
         '',
         modelRoot,
@@ -223,11 +226,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       const meshes = result.meshes;
 
       if (meshes.length === 0) {
-
         console.warn('No se encontraron mallas');
-
         return;
-
       }
 
       const allNodes = new BABYLON.TransformNode(
@@ -242,13 +242,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       );
 
       meshes.forEach((mesh, index) => {
-
         mesh.isVisible = true;
-
         mesh.parent = allNodes;
 
         if (!mesh.material) {
-
           const defaultMat = new BABYLON.StandardMaterial(
             `mat_${index}`,
             this.scene!
@@ -261,9 +258,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           );
 
           mesh.material = defaultMat;
-
         }
-
       });
 
       this.scene.render();
@@ -278,7 +273,6 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       const targetSize = 25;
 
       if (size > 0) {
-
         const scale = targetSize / size;
 
         allNodes.scaling = new BABYLON.Vector3(
@@ -304,7 +298,6 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
         allNodes.position.x = -centerX;
         allNodes.position.y = -scaledMin.y;
         allNodes.position.z = -centerZ;
-
       }
 
       this.scene.render();
@@ -314,7 +307,6 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       console.log('==========================');
 
       meshes.forEach((mesh) => {
-
         const pos = mesh.getBoundingInfo().boundingBox.centerWorld;
 
         console.log('OBJETO:', mesh.name);
@@ -327,17 +319,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           'Z:',
           pos.z.toFixed(2)
         );
-
       });
 
-      // ==========================
-      // CLICK EN OBJETOS
-      // ==========================
-
       this.scene.onPointerDown = (evt, pickResult) => {
-
         if (pickResult.hit && pickResult.pickedMesh) {
-
           const mesh = pickResult.pickedMesh;
 
           const pos =
@@ -362,24 +347,17 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           );
 
           console.log('======================');
-
         }
-
       };
-
     } catch (error) {
-
       console.error(
         'No se pudo cargar el modelo 3D:',
         error
       );
-
     }
-
   }
 
   private createGround(): void {
-
     if (!this.scene) return;
 
     const ground = BABYLON.MeshBuilder.CreateGround(
@@ -405,7 +383,6 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     );
 
     ground.material = groundMat;
-
   }
 
 }

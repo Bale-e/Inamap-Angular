@@ -1,1 +1,0 @@
-// Interfaz TS: Floor { id, name, zOffset, modelPath }

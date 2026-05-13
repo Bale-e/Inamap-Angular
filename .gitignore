@@ -1,18 +1,35 @@
-node_modules
-.angular/cache/17.3.17/angular-webpack/1772833971a6fa12921b1cac8ca603bb5fe92e4f/0.pack
-.angular/cache/17.3.17/angular-webpack/1772833971a6fa12921b1cac8ca603bb5fe92e4f/1.pack
-.angular/cache/17.3.17/angular-webpack/1772833971a6fa12921b1cac8ca603bb5fe92e4f/index.pack
-.angular/cache/17.3.17/angular-webpack/1b64cb6547ef01fc72780c3b586ae29821de4b32/index.pack
-.angular/cache/17.3.17/angular-webpack/2bc32872b25bcb459882074530c7539871f84ddd/0.pack
-.angular/cache/17.3.17/angular-webpack/1b64cb6547ef01fc72780c3b586ae29821de4b32/0.pack
-.angular/cache/17.3.17/angular-webpack/2bc32872b25bcb459882074530c7539871f84ddd/1.pack
-.angular/cache/17.3.17/angular-webpack/2bc32872b25bcb459882074530c7539871f84ddd/10.pack
-.angular/cache/17.3.17/angular-webpack/2bc32872b25bcb459882074530c7539871f84ddd/10.pack
-.angular/cache/17.3.17/angular-webpack/2bc32872b25bcb459882074530c7539871f84ddd/11.pack
-.angular/cache/17.3.17/angular-webpack/2bc32872b25bcb459882074530c7539871f84ddd/12.pack
-.angular/cache/17.3.17/angular-webpack/2bc32872b25bcb459882074530c7539871f84ddd/13.pack
-/.angular/cache/17.3.17/angular-webpack/2bc32872b25bcb459882074530c7539871f84ddd
-/.angular/cache/17.3.17/angular-webpack/38d36dc4b20d676a39793febe439a4ddf7139587
-/.angular/cache/17.3.17/angular-webpack/39ae874f9ad77a1747199de1f21578e52daeeff7
-/.angular/cache/17.3.17/angular-webpack
-ServiceAccountKey.json
+# --- Archivos de compilación y salida ---
+/dist
+/tmp
+/out-tsc
+/bazel-out
+
+# --- Dependencias ---
+node_modules/
+jspm_packages/
+bower_components/
+
+# --- Caché de Angular ---
+.angular/cache/
+
+# --- Archivos de IDEs/Editores ---
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --- Sistema operativo ---
+.DS_Store
+Thumbs.db
+
+# --- Logs y depuración ---
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# --- Otros ---
+.env

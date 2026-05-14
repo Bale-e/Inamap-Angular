@@ -32,9 +32,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   // IMPORTANTE: los keys deben coincidir con mesh.name del OBJ
   // Abre la consola del navegador en modo 3D para ver los nombres reales
   private infoData: { [key: string]: { nombre: string, desc: string } } = {
-    'Cuerpo3':  { nombre: 'Fotocopiadora y Suministros', desc: 'Servicio de fotocopiado y venta de materiales para estudiantes.' },
+    'Cuerpo3':  { nombre: 'Sala de Tutorías 2',          desc: 'Espacio de apoyo académico con tutores disponibles.' },
     'Cuerpo14': { nombre: 'Sala de Tutorías 1',          desc: 'Espacio de apoyo académico con tutores disponibles.' },
-    'Cuerpo21': { nombre: 'Sala de Tutorías 2',          desc: 'Espacio de apoyo académico con tutores disponibles.' }
+    'Cuerpo21': { nombre: 'Fotocopiadora y Suministros', desc: 'Servicio de fotocopiado y venta de materiales para estudiantes.' }
   };
 
   constructor(private http: HttpClient) {}
@@ -303,43 +303,37 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       console.log('==== NOMBRES DE CUERPOS ====');
       meshes.forEach((mesh) => console.log('CUERPO:', mesh.name));
 
-      // ── Hover — mostrar info al pasar el cursor ───────────
-      canvas.addEventListener('mousemove', (evt) => {
-        if (!this.scene || !this.infoBox) return;
+
+
+      // ── Click — detectar clic en cuerpo o suelo y imprimir coordenadas ──
+      canvas.addEventListener('click', (evt) => {
+        if (!this.scene) return;
 
         const pickResult = this.scene.pick(evt.clientX, evt.clientY);
 
-        if (pickResult?.hit && pickResult.pickedMesh) {
-          const info = this.infoData[pickResult.pickedMesh.name];
-          if (info) {
-            this.infoBox.innerHTML = `
-              <p style="font-weight:bold;font-size:14px;margin:0 0 4px">${info.nombre}</p>
-              <p style="font-size:12px;color:#555;margin:0">${info.desc}</p>
-            `;
-            this.infoBox.style.display = 'block';
-            this.infoBox.style.left = (evt.clientX + 15) + 'px';
-            this.infoBox.style.top  = (evt.clientY + 15) + 'px';
-          } else {
+        if (pickResult?.hit) {
+          const target = pickResult.pickedMesh ? pickResult.pickedMesh.name : 'suelo';
+          const coords = pickResult.pickedPoint;
+          console.log(`Clic en: ${target}, Coordenadas: (${coords?.x.toFixed(2)}, ${coords?.y.toFixed(2)}, ${coords?.z.toFixed(2)})`);
+
+          // ── Mostrar infoBox si hay info para el mesh clicado ──
+          if (pickResult.pickedMesh && this.infoBox) {
+            const info = this.infoData[pickResult.pickedMesh.name];
+            if (info) {
+              this.infoBox.innerHTML = `
+                <p style="font-weight:bold;font-size:14px;margin:0 0 4px">${info.nombre}</p>
+                <p style="font-size:12px;color:#555;margin:0">${info.desc}</p>
+              `;
+              this.infoBox.style.display = 'block';
+              this.infoBox.style.left = (evt.clientX + 15) + 'px';
+              this.infoBox.style.top  = (evt.clientY + 15) + 'px';
+            } else {
+              this.infoBox.style.display = 'none';
+            }
+          } else if (this.infoBox) {
             this.infoBox.style.display = 'none';
           }
-
-          // ── Mostrar flecha para Cuerpo23 ───────────────────
-          if (pickResult.pickedMesh.name === 'Cuerpo23' && this.floorArrow) {
-            this.floorArrow.style.display = 'block';
-            this.floorArrow.style.left = (evt.clientX + 15) + 'px';
-            this.floorArrow.style.top  = (evt.clientY - 30) + 'px';
-          } else if (this.floorArrow) {
-            this.floorArrow.style.display = 'none';
-          }
-        } else {
-          this.infoBox.style.display = 'none';
-          if (this.floorArrow) this.floorArrow.style.display = 'none';
         }
-      });
-
-      canvas.addEventListener('mouseleave', () => {
-        if (this.infoBox) this.infoBox.style.display = 'none';
-        if (this.floorArrow) this.floorArrow.style.display = 'none';
       });
 
     } catch (error) {

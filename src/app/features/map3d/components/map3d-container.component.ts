@@ -25,6 +25,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private bannerControlsAttached = false;
   private infoBox: HTMLDivElement | null = null;
   private floorArrow: HTMLDivElement | null = null;
+  private buildingBMarker: HTMLDivElement | null = null;
   floorDialogVisible = false;
 
   private onDocumentClick = (evt: MouseEvent): void => {
@@ -45,6 +46,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     'Cuerpo21': { nombre: 'Fotocopiadora y Suministros', desc: 'Servicio de fotocopiado y venta de materiales para estudiantes.' }
   };
 
+  // ── Cuerpos que abren el diálogo de selección de piso ────
+  private floorSelectionBodies = ['Cuerpo23', 'Cuerpo29', 'Cuerpo15', 'Cuerpo20'];
+
   constructor(private http: HttpClient) {}
 
   ngAfterViewInit(): void {
@@ -52,6 +56,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.attachBannerControls();
     this.createInfoBox();
     this.createFloorArrow();
+    this.createBuildingBMarker();
   }
 
   // ── Crea el cuadro de info flotante ──────────────────────
@@ -92,6 +97,40 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     document.body.appendChild(this.floorArrow);
   }
 
+  // ── Crea el marcador para Edificio B ─────────────────────
+  private createBuildingBMarker(): void {
+    this.buildingBMarker = document.createElement('div');
+    this.buildingBMarker.style.cssText = `
+      display: none;
+      position: fixed;
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      z-index: 999;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    `;
+    this.buildingBMarker.innerHTML = '→ Ir al Edificio B - Piso 1';
+    this.buildingBMarker.addEventListener('mouseenter', () => {
+      if (this.buildingBMarker) {
+        this.buildingBMarker.style.backgroundColor = 'rgba(0,0,0,0.95)';
+      }
+    });
+    this.buildingBMarker.addEventListener('mouseleave', () => {
+      if (this.buildingBMarker) {
+        this.buildingBMarker.style.backgroundColor = 'rgba(0,0,0,0.8)';
+      }
+    });
+    this.buildingBMarker.addEventListener('click', (e) => {
+      e.stopPropagation();
+      console.log('Navegando a Edificio B - Piso 1');
+    });
+    document.body.appendChild(this.buildingBMarker);
+  }
+
   private ensureLoaders(): void {
     if (!BABYLON.SceneLoader.IsPluginForExtensionAvailable('.obj')) {
       console.warn('OBJ loader no está disponible');
@@ -109,6 +148,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (this.floorArrow) {
       document.body.removeChild(this.floorArrow);
       this.floorArrow = null;
+    }
+    if (this.buildingBMarker) {
+      document.body.removeChild(this.buildingBMarker);
+      this.buildingBMarker = null;
     }
   }
 
@@ -228,7 +271,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.load3dModel(canvas);
 
     this.renderLoopFn = () => {
-      if (this.scene) this.scene.render();
+      if (this.scene && this.camera) {
+        this.scene.render();
+        this.updateBuildingBMarkerPosition(canvas);
+      }
     };
 
     this.engine.runRenderLoop(this.renderLoopFn);
@@ -324,6 +370,11 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           const coords = pickResult.pickedPoint;
           console.log(`Clic en: ${target}, Coordenadas: (${coords?.x.toFixed(2)}, ${coords?.y.toFixed(2)}, ${coords?.z.toFixed(2)})`);
 
+          // ── Abrir diálogo de selección de piso si es uno de los cuerpos especificados ──
+          if (pickResult.pickedMesh && this.floorSelectionBodies.includes(pickResult.pickedMesh.name)) {
+            this.openFloorDialog();
+          }
+
           // ── Mostrar infoBox si hay info para el mesh clicado ──
           if (pickResult.pickedMesh && this.infoBox) {
             const info = this.infoData[pickResult.pickedMesh.name];
@@ -356,6 +407,53 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     const groundMat = new BABYLON.StandardMaterial('groundMat', this.scene);
     groundMat.diffuseColor = new BABYLON.Color3(0.18, 0.18, 0.18);
     ground.material = groundMat;
+  }
+
+  private updateBuildingBMarkerPosition(canvas: HTMLCanvasElement): void {
+    if (!this.buildingBMarker || !this.scene || !this.camera || !this.engine) return;
+
+    // Solo mostrar el marcador si estamos en el piso 1 en vista 3D
+    const isFirstFloor = this.currentFloor === this.firstFloorModel;
+    if (!isFirstFloor || this.viewMode !== '3d') {
+      this.buildingBMarker.style.display = 'none';
+      return;
+    }
+
+    // Centro calculado de los 4 puntos:
+    // (-12.42, 0.01, -0.35), (-10.62, 0.01, -0.29), (-10.69, 0.01, -2.93), (-12.31, 0.01, -2.95)
+    const markerWorldPos = new BABYLON.Vector3(-11.51, 0.01, -1.63);
+
+    try {
+      // Obtener las matrices necesarias
+      const viewMatrix = this.camera.getViewMatrix();
+      const projectionMatrix = this.camera.getProjectionMatrix();
+      
+      // Crear matriz de transformación combinada (view * projection)
+      const transformMatrix = viewMatrix.multiply(projectionMatrix);
+
+      // Proyectar el punto 3D a coordenadas de pantalla
+      const viewport = new BABYLON.Viewport(0, 0, this.engine.getRenderWidth(), this.engine.getRenderHeight());
+      const screenCoords = BABYLON.Vector3.Project(
+        markerWorldPos,
+        BABYLON.Matrix.Identity(),
+        transformMatrix,
+        viewport
+      );
+
+      // Verificar si el punto está dentro de la pantalla (z > 0 significa está adelante de la cámara)
+      if (screenCoords.z > 0 && screenCoords.z < 1 &&
+          screenCoords.x > 0 && screenCoords.x < this.engine.getRenderWidth() &&
+          screenCoords.y > 0 && screenCoords.y < this.engine.getRenderHeight()) {
+        this.buildingBMarker.style.display = 'block';
+        this.buildingBMarker.style.left = (screenCoords.x - 60) + 'px'; // Centrar horizontalmente
+        this.buildingBMarker.style.top = (screenCoords.y - 30) + 'px';  // Posicionar arriba del marcador
+      } else {
+        this.buildingBMarker.style.display = 'none';
+      }
+    } catch (error) {
+      console.warn('Error actualizando posición del marcador:', error);
+      this.buildingBMarker.style.display = 'none';
+    }
   }
 
   toggleMarker(id: string): void {

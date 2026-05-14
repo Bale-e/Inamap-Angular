@@ -54,6 +54,114 @@
   z-index: 10;
 }
 
+.floor-action {
+  position: absolute;
+  left: 10%;
+  bottom: 16%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 11;
+  pointer-events: none;
+}
+
+.floor-action__button {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 50%;
+  background: #ff7a00;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+  color: #fff;
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  overflow: visible;
+
+  &:hover {
+    transform: scale(1.06);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.16);
+  }
+
+  &:hover .floor-action__ring {
+    animation: floor-action-ring 2s linear infinite;
+  }
+}
+
+.floor-action__ring {
+  position: absolute;
+  inset: -6px;
+  border: 1.6px solid rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: none;
+  transition: animation 0.2s ease;
+}
+
+@keyframes floor-action-ring {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.floor-action__icon {
+  position: relative;
+  z-index: 1;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.floor-action__popover {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(20, 20, 20, 0.92);
+  color: #fff;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-12px) translateY(4px);
+  transition: opacity 0.24s ease, transform 0.24s ease, visibility 0.24s ease;
+  pointer-events: none;
+
+  &.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0) translateY(0);
+  }
+}
+
+.floor-action__popover-arrow {
+  width: 10px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+@keyframes floor-action-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.16);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 16px 28px rgba(0, 0, 0, 0.2);
+  }
+}
+
 .zoom-btn {
   width: 40px;
   height: 40px;

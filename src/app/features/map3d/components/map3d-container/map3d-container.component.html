@@ -10,6 +10,10 @@
 
   <div class="view-3d" *ngIf="viewMode === '3d'">
     <div #renderCanvas class="render-canvas"></div>
+    <div class="cuerpo23-click-hint" [class.visible]="cuerpo23HintVisible" [style.left.px]="cuerpo23HintX" [style.top.px]="cuerpo23HintY">
+      <span class="cuerpo23-click-hint-arrow">↑</span>
+      <span>Ir al segundo piso</span>
+    </div>
     <div class="zoom-controls">
       <button class="zoom-btn" (click)="zoomIn()" title="Acercar">+</button>
       <button class="zoom-btn" (click)="zoomOut()" title="Alejar">-</button>

@@ -12,6 +12,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   @ViewChild('renderCanvas', { static: false }) renderCanvasContainer!: ElementRef<HTMLDivElement>;
 
   viewMode: '2d' | '3d' = '2d';
+  cuerpo23HintVisible = false;
+  cuerpo23HintX = 0;
+  cuerpo23HintY = 0;
+  private cuerpo23HintTimer: any = null;
   private engine: BABYLON.Engine | null = null;
   private scene: BABYLON.Scene | null = null;
   private camera: BABYLON.ArcRotateCamera | null = null;
@@ -35,6 +39,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.dispose3d();
+    if (this.cuerpo23HintTimer) {
+      clearTimeout(this.cuerpo23HintTimer);
+    }
   }
 
   setView(mode: '2d' | '3d'): void {
@@ -60,6 +67,29 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (this.camera) {
       const newRadius = this.camera.radius * 1.15;
       this.camera.radius = Math.min(newRadius, this.camera.upperRadiusLimit ?? 500);
+    }
+  }
+
+  private showCuerpo23Hint(clientX: number, clientY: number): void {
+    this.cuerpo23HintX = clientX;
+    this.cuerpo23HintY = clientY - 16;
+    this.cuerpo23HintVisible = true;
+
+    if (this.cuerpo23HintTimer) {
+      clearTimeout(this.cuerpo23HintTimer);
+    }
+
+    this.cuerpo23HintTimer = setTimeout(() => {
+      this.cuerpo23HintVisible = false;
+      this.cuerpo23HintTimer = null;
+    }, 2800);
+  }
+
+  private hideCuerpo23Hint(): void {
+    this.cuerpo23HintVisible = false;
+    if (this.cuerpo23HintTimer) {
+      clearTimeout(this.cuerpo23HintTimer);
+      this.cuerpo23HintTimer = null;
     }
   }
 
@@ -223,6 +253,20 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
         console.warn('No se pudieron calcular los bounds. Usando escala predeterminada.');
         allNodes.scaling = new BABYLON.Vector3(0.1, 0.1, 0.1);
       }
+
+      this.scene.onPointerDown = (evt, pickResult) => {
+        if (pickResult.hit && pickResult.pickedMesh?.name === 'Cuerpo23') {
+          const native = evt as any;
+          const button = native.button ?? native.srcEvent?.button;
+          if (button === 0) {
+            const clientX = native.clientX ?? native.srcEvent?.clientX ?? 0;
+            const clientY = native.clientY ?? native.srcEvent?.clientY ?? 0;
+            this.showCuerpo23Hint(clientX, clientY);
+          }
+        } else {
+          this.hideCuerpo23Hint();
+        }
+      };
 
     } catch (error) {
       console.error('No se pudo cargar el modelo 3D:', error);

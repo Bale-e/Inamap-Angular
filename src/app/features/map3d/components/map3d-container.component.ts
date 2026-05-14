@@ -14,6 +14,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   renderCanvasContainer!: ElementRef<HTMLDivElement>;
 
   viewMode: '2d' | '3d' = '2d';
+  currentFloor = 'Edifico A - Piso 1.obj';
 
   private engine: BABYLON.Engine | null = null;
   private scene: BABYLON.Scene | null = null;
@@ -106,6 +107,13 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
         newRadius,
         this.camera.upperRadiusLimit ?? 500
       );
+    }
+  }
+  changeFloor(floor: string): void {
+    this.currentFloor = floor;
+
+    if (this.viewMode === '3d') {
+      this.init3dScene();
     }
   }
 
@@ -213,7 +221,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (!this.scene) return;
 
     const modelRoot = '/assets/3d-models/Edificio A/';
-    const modelName = 'Edifico A - Piso 1.obj';
+    const modelName = this.currentFloor;
 
     try {
       const result = await BABYLON.SceneLoader.ImportMeshAsync(

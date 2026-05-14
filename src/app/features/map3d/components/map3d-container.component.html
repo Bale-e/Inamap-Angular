@@ -6,6 +6,17 @@
   <div class="view-3d" *ngIf="viewMode === '3d'">
     <div #renderCanvas class="render-canvas"></div>
 
+      <div class="floor-action">
+      <button class="floor-action__button" type="button" (click)="goToTargetFloor()" [attr.aria-label]="floorActionLabel">
+        <span class="floor-action__ring"></span>
+        <span class="floor-action__icon">{{ floorActionIcon }}</span>
+      </button>
+      <div class="floor-action__popover" [class.visible]="floorActionVisible">
+        <span class="floor-action__popover-arrow"></span>
+        <span class="floor-action__popover-text">{{ floorActionLabel }}</span>
+      </div>
+    </div>
+
     <div class="zoom-controls">
       <button class="zoom-btn" (click)="zoomIn()" title="Acercar">+</button>
       <button class="zoom-btn" (click)="zoomOut()" title="Alejar">-</button>

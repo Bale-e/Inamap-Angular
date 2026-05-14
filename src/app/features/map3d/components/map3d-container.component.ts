@@ -14,7 +14,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   renderCanvasContainer!: ElementRef<HTMLDivElement>;
 
   viewMode: '2d' | '3d' = '2d';
-  currentFloor = 'Edifico A - Piso 1.obj';
+  private readonly firstFloorModel = 'Edifico A - Piso 1.obj';
+  private readonly secondFloorModel = 'Edificio A - piso 2.obj';
+  currentFloor = this.firstFloorModel;
 
   private engine: BABYLON.Engine | null = null;
   private scene: BABYLON.Scene | null = null;
@@ -22,6 +24,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private renderLoopFn: (() => void) | null = null;
   private bannerControlsAttached = false;
   private infoBox: HTMLDivElement | null = null;
+  private floorArrow: HTMLDivElement | null = null;
+  floorActionVisible = false;
+  private floorActionTimer: ReturnType<typeof window.setTimeout> | null = null;
 
   // ── Información de cada cuerpo ──────────────────────────
   // IMPORTANTE: los keys deben coincidir con mesh.name del OBJ
@@ -38,6 +43,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.ensureLoaders();
     this.attachBannerControls();
     this.createInfoBox();
+    this.createFloorArrow();
   }
 
   // ── Crea el cuadro de info flotante ──────────────────────
@@ -59,6 +65,25 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     document.body.appendChild(this.infoBox);
   }
 
+  // ── Crea la flecha para ir al piso dos ───────────────────
+  private createFloorArrow(): void {
+    this.floorArrow = document.createElement('div');
+    this.floorArrow.style.cssText = `
+      display: none;
+      position: fixed;
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      z-index: 1001;
+      pointer-events: none;
+    `;
+    this.floorArrow.innerHTML = '→ Ir al piso dos';
+    document.body.appendChild(this.floorArrow);
+  }
+
   private ensureLoaders(): void {
     if (!BABYLON.SceneLoader.IsPluginForExtensionAvailable('.obj')) {
       console.warn('OBJ loader no está disponible');
@@ -72,6 +97,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (this.infoBox) {
       document.body.removeChild(this.infoBox);
       this.infoBox = null;
+    }
+    if (this.floorArrow) {
+      document.body.removeChild(this.floorArrow);
+      this.floorArrow = null;
     }
   }
 
@@ -115,6 +144,42 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (this.camera) {
       const newRadius = this.camera.radius * 1.15;
       this.camera.radius = Math.min(newRadius, this.camera.upperRadiusLimit ?? 500);
+    }
+  }
+
+  get floorActionLabel(): string {
+    return this.currentFloor === this.secondFloorModel ? 'Ir al primer piso' : 'Ir al segundo piso';
+  }
+
+  get floorActionIcon(): string {
+    return this.currentFloor === this.secondFloorModel ? '↓' : '↑';
+  }
+
+  goToTargetFloor(): void {
+    this.floorActionVisible = true;
+    if (this.floorActionTimer) {
+      window.clearTimeout(this.floorActionTimer);
+    }
+    this.floorActionTimer = window.setTimeout(() => this.hideFloorAction(), 3200);
+
+    const targetFloor = this.currentFloor === this.secondFloorModel ? this.firstFloorModel : this.secondFloorModel;
+    if (this.currentFloor !== targetFloor) {
+      this.currentFloor = targetFloor;
+      if (this.viewMode === '3d') {
+        this.init3dScene();
+      }
+    }
+
+    if (this.viewMode !== '3d') {
+      this.setView('3d');
+    }
+  }
+
+  private hideFloorAction(): void {
+    this.floorActionVisible = false;
+    if (this.floorActionTimer) {
+      window.clearTimeout(this.floorActionTimer);
+      this.floorActionTimer = null;
     }
   }
 
@@ -257,13 +322,24 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           } else {
             this.infoBox.style.display = 'none';
           }
+
+          // ── Mostrar flecha para Cuerpo23 ───────────────────
+          if (pickResult.pickedMesh.name === 'Cuerpo23' && this.floorArrow) {
+            this.floorArrow.style.display = 'block';
+            this.floorArrow.style.left = (evt.clientX + 15) + 'px';
+            this.floorArrow.style.top  = (evt.clientY - 30) + 'px';
+          } else if (this.floorArrow) {
+            this.floorArrow.style.display = 'none';
+          }
         } else {
           this.infoBox.style.display = 'none';
+          if (this.floorArrow) this.floorArrow.style.display = 'none';
         }
       });
 
       canvas.addEventListener('mouseleave', () => {
         if (this.infoBox) this.infoBox.style.display = 'none';
+        if (this.floorArrow) this.floorArrow.style.display = 'none';
       });
 
     } catch (error) {

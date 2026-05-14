@@ -132,7 +132,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     const modelName = 'Piso 1.obj';
 
     try {
-      const result = await BABYLON.SceneLoader.ImportMeshAsync('', modelRoot, modelName, this.scene);
+      const result = await BABYLON.SceneLoader.ImportMeshAsync('', encodeURI(modelRoot), encodeURI(modelName), this.scene);
       const meshes = result.meshes;
 
       if (meshes.length === 0) {

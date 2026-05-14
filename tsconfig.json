@@ -5,6 +5,7 @@
     "module": "es2020",
     "moduleResolution": "bundler",
     "target": "es2022",
+    "baseUrl": ".",
     "skipLibCheck": true,
     "types": [],
     "lib": [
@@ -17,5 +18,9 @@
   },
   "include": [
     "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "out-tsc"
   ]
 }

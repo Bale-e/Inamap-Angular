@@ -7,13 +7,18 @@
     <div #renderCanvas class="render-canvas"></div>
 
       <div class="floor-action">
-      <button class="floor-action__button" type="button" (click)="goToTargetFloor()" [attr.aria-label]="floorActionLabel">
+      <button class="floor-action__button" type="button" (click)="openFloorDialog()" aria-label="Seleccionar piso">
         <span class="floor-action__ring"></span>
         <span class="floor-action__icon">{{ floorActionIcon }}</span>
       </button>
-      <div class="floor-action__popover" [class.visible]="floorActionVisible">
-        <span class="floor-action__popover-arrow"></span>
-        <span class="floor-action__popover-text">{{ floorActionLabel }}</span>
+
+      <div class="floor-action__dialog" [class.visible]="floorDialogVisible">
+        <p>¿A qué piso quieres ir?</p>
+        <div class="floor-action__dialog-buttons">
+          <button type="button" (click)="selectFloor('first')">Primer piso</button>
+          <button type="button" (click)="selectFloor('second')">Segundo piso</button>
+        </div>
+        <button class="floor-action__dialog-close" type="button" (click)="closeFloorDialog()">Cancelar</button>
       </div>
     </div>
 

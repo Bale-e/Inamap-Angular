@@ -119,38 +119,64 @@
   line-height: 1;
 }
 
-.floor-action__popover {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
+.floor-action__dialog {
+  position: absolute;
+  left: 72px;
+  bottom: 0;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  padding: 10px 14px;
-  border-radius: 999px;
-  background: rgba(20, 20, 20, 0.92);
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(15, 15, 15, 0.96);
   color: #fff;
   font-size: 14px;
-  letter-spacing: 0.01em;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
   opacity: 0;
   visibility: hidden;
   transform: translateX(-12px) translateY(4px);
   transition: opacity 0.24s ease, transform 0.24s ease, visibility 0.24s ease;
-  pointer-events: none;
-
-  &.visible {
-    opacity: 1;
-    visibility: visible;
-    transform: translateX(0) translateY(0);
-  }
+  pointer-events: auto;
 }
 
-.floor-action__popover-arrow {
-  width: 10px;
-  height: 10px;
-  background: rgba(255, 255, 255, 0.95);
-  clip-path: polygon(0 0, 100% 50%, 0 100%);
+.floor-action__dialog.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0) translateY(0);
 }
 
+.floor-action__dialog p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.floor-action__dialog-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.floor-action__dialog-buttons button,
+.floor-action__dialog-close {
+  flex: 1;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.floor-action__dialog-buttons button {
+  background: #ff7a00;
+  color: #fff;
+}
+
+.floor-action__dialog-close {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
 @keyframes floor-action-pulse {
   0%, 100% {
     transform: scale(1);

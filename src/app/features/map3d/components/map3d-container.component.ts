@@ -25,8 +25,16 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private bannerControlsAttached = false;
   private infoBox: HTMLDivElement | null = null;
   private floorArrow: HTMLDivElement | null = null;
-  floorActionVisible = false;
-  private floorActionTimer: ReturnType<typeof window.setTimeout> | null = null;
+  floorDialogVisible = false;
+
+  private onDocumentClick = (evt: MouseEvent): void => {
+    if (this.infoBox) {
+      this.infoBox.style.display = 'none';
+    }
+    if (this.floorArrow) {
+      this.floorArrow.style.display = 'none';
+    }
+  };
 
   // ── Información de cada cuerpo ──────────────────────────
   // IMPORTANTE: los keys deben coincidir con mesh.name del OBJ
@@ -155,14 +163,14 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     return this.currentFloor === this.secondFloorModel ? '↓' : '↑';
   }
 
-  goToTargetFloor(): void {
-    this.floorActionVisible = true;
-    if (this.floorActionTimer) {
-      window.clearTimeout(this.floorActionTimer);
-    }
-    this.floorActionTimer = window.setTimeout(() => this.hideFloorAction(), 3200);
+  openFloorDialog(): void {
+    this.floorDialogVisible = true;
+  }
 
-    const targetFloor = this.currentFloor === this.secondFloorModel ? this.firstFloorModel : this.secondFloorModel;
+  selectFloor(floor: 'first' | 'second'): void {
+    this.floorDialogVisible = false;
+    const targetFloor = floor === 'first' ? this.firstFloorModel : this.secondFloorModel;
+
     if (this.currentFloor !== targetFloor) {
       this.currentFloor = targetFloor;
       if (this.viewMode === '3d') {
@@ -175,12 +183,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private hideFloorAction(): void {
-    this.floorActionVisible = false;
-    if (this.floorActionTimer) {
-      window.clearTimeout(this.floorActionTimer);
-      this.floorActionTimer = null;
-    }
+  closeFloorDialog(): void {
+    this.floorDialogVisible = false;
   }
 
   changeFloor(floor: string): void {
@@ -229,6 +233,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
     this.engine.runRenderLoop(this.renderLoopFn);
     window.addEventListener('resize', this.onResize);
+    document.addEventListener('click', this.onDocumentClick, true);
   }
 
   private onResize = (): void => {
@@ -238,10 +243,13 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private dispose3d(): void {
     if (this.engine) {
       window.removeEventListener('resize', this.onResize);
+      document.removeEventListener('click', this.onDocumentClick, true);
       this.engine.stopRenderLoop();
       this.engine.dispose();
       this.engine = null;
       this.scene = null;
+    } else {
+      document.removeEventListener('click', this.onDocumentClick, true);
     }
     if (this.renderCanvasContainer?.nativeElement) {
       this.renderCanvasContainer.nativeElement.innerHTML = '';

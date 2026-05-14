@@ -1,0 +1,1 @@
+// Interfaz TS: Building { id, name, floors: Floor[] }

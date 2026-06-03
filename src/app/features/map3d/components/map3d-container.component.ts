@@ -16,12 +16,16 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   viewMode: '2d' | '3d' = '2d';
   private readonly firstFloorModel = 'Edifico A - Piso 1.obj';
   private readonly secondFloorModel = 'Edificio A - piso 2.obj';
+  private readonly thirdFloorModel = 'Edificio A - piso 3.obj';
   currentFloor = this.firstFloorModel;
 
   private engine: BABYLON.Engine | null = null;
   private scene: BABYLON.Scene | null = null;
   private camera: BABYLON.ArcRotateCamera | null = null;
+  private cameraBeforeRenderObserver: BABYLON.Nullable<BABYLON.Observer<BABYLON.Scene>> = null;
   private renderLoopFn: (() => void) | null = null;
+  private orthoSize = 9;
+  private searchModeEnabled = false;
   private bannerControlsAttached = false;
   private infoBox: HTMLDivElement | null = null;
   private floorArrow: HTMLDivElement | null = null;
@@ -36,6 +40,11 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       this.floorArrow.style.display = 'none';
     }
   };
+
+  // Estado y marcadores para demo de ruta
+  private selectionStart: BABYLON.Vector3 | null = null;
+  private startMarker: BABYLON.Mesh | null = null;
+  private endMarker: BABYLON.Mesh | null = null;
 
   // ── Información de cada cuerpo ──────────────────────────
   // IMPORTANTE: los keys deben coincidir con mesh.name del OBJ
@@ -171,8 +180,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (this.bannerControlsAttached) return;
     const view2DBtn = document.getElementById('view2DBtn');
     const view3DBtn = document.getElementById('view3DBtn');
+    const searchPlaceBtn = document.getElementById('searchPlaceBtn');
     if (view2DBtn) view2DBtn.addEventListener('click', () => this.setView('2d'));
     if (view3DBtn) view3DBtn.addEventListener('click', () => this.setView('3d'));
+    if (searchPlaceBtn) searchPlaceBtn.addEventListener('click', () => this.toggleSearchMode());
     this.bannerControlsAttached = true;
     this.updateBannerButtons();
   }
@@ -180,39 +191,76 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private updateBannerButtons(): void {
     const view2DBtn = document.getElementById('view2DBtn') as HTMLButtonElement | null;
     const view3DBtn = document.getElementById('view3DBtn') as HTMLButtonElement | null;
+    const searchPlaceBtn = document.getElementById('searchPlaceBtn') as HTMLButtonElement | null;
     if (view2DBtn) view2DBtn.disabled = this.viewMode === '2d';
     if (view3DBtn) view3DBtn.disabled = this.viewMode === '3d';
+    if (searchPlaceBtn) {
+      searchPlaceBtn.disabled = this.viewMode !== '3d';
+      searchPlaceBtn.textContent = this.searchModeEnabled ? 'Buscar lugar (activo)' : 'Buscar lugar';
+    }
+  }
+
+  private toggleSearchMode(): void {
+    if (this.viewMode !== '3d') {
+      this.setView('3d');
+    }
+    this.searchModeEnabled = !this.searchModeEnabled;
+    if (!this.searchModeEnabled) {
+      this.clearPath();
+      this.clearMarkers();
+    }
+    this.updateBannerButtons();
   }
 
   zoomIn(): void {
-    if (this.camera) {
+    if (!this.camera) return;
+
+    if (this.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
+      this.orthoSize = Math.max(4, this.orthoSize * 0.85);
+      this.updateOrthoCamera();
+    } else {
       const newRadius = this.camera.radius * 0.85;
       this.camera.radius = Math.max(newRadius, this.camera.lowerRadiusLimit ?? 1);
     }
   }
 
   zoomOut(): void {
-    if (this.camera) {
+    if (!this.camera) return;
+
+    if (this.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
+      this.orthoSize = Math.min(18, this.orthoSize * 1.15);
+      this.updateOrthoCamera();
+    } else {
       const newRadius = this.camera.radius * 1.15;
       this.camera.radius = Math.min(newRadius, this.camera.upperRadiusLimit ?? 500);
     }
   }
 
   get floorActionLabel(): string {
-    return this.currentFloor === this.secondFloorModel ? 'Ir al primer piso' : 'Ir al segundo piso';
+    if (this.currentFloor === this.secondFloorModel) {
+      return 'Ir al primer piso';
+    }
+    if (this.currentFloor === this.thirdFloorModel) {
+      return 'Ir al segundo piso';
+    }
+    return 'Ir al segundo piso';
   }
 
   get floorActionIcon(): string {
-    return this.currentFloor === this.secondFloorModel ? '↓' : '↑';
+    return this.currentFloor === this.firstFloorModel ? '↑' : '↓';
   }
 
   openFloorDialog(): void {
     this.floorDialogVisible = true;
   }
 
-  selectFloor(floor: 'first' | 'second'): void {
+  selectFloor(floor: 'first' | 'second' | 'third'): void {
     this.floorDialogVisible = false;
-    const targetFloor = floor === 'first' ? this.firstFloorModel : this.secondFloorModel;
+    const targetFloor = floor === 'first'
+      ? this.firstFloorModel
+      : floor === 'second'
+        ? this.secondFloorModel
+        : this.thirdFloorModel;
 
     if (this.currentFloor !== targetFloor) {
       this.currentFloor = targetFloor;
@@ -254,12 +302,62 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.scene = new BABYLON.Scene(this.engine);
     this.scene.clearColor = new BABYLON.Color4(0.1, 0.1, 0.1, 1);
 
-    this.camera = new BABYLON.ArcRotateCamera('camera', -Math.PI / 2, Math.PI / 3, 20, BABYLON.Vector3.Zero(), this.scene);
-    this.camera.attachControl(canvas, true);
+    this.camera = new BABYLON.ArcRotateCamera('camera', -Math.PI / 4, Math.PI / 4, 12, BABYLON.Vector3.Zero(), this.scene);
+    this.camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
+    this.camera.attachControl(canvas, true, false);
     this.camera.wheelDeltaPercentage = 0.01;
-    this.camera.lowerRadiusLimit = 2;
-    this.camera.upperRadiusLimit = 300;
+    this.camera.lowerRadiusLimit = 8;
+    this.camera.upperRadiusLimit = 20;
     this.camera.panningSensibility = 50;
+    this.camera.panningAxis = new BABYLON.Vector3(1, 0, 0);
+    this.camera.lowerBetaLimit = 0.01;
+    this.camera.upperBetaLimit = Math.PI / 2;
+
+    // Permitir movimiento horizontal en X solo cuando se haya hecho zoom in
+    const fixedCameraY = 0;
+    const maxPanX = 5;
+    const minPanX = -5;
+    if (this.scene) {
+      this.cameraBeforeRenderObserver = this.scene.onBeforeRenderObservable.add(() => {
+        const camera = this.camera;
+        if (!camera) return;
+        try {
+          const target = camera.target;
+          let modified = false;
+          const newTarget = target.clone();
+
+          // Mantener Y fijo siempre
+          if (newTarget.y !== fixedCameraY) {
+            newTarget.y = fixedCameraY;
+            modified = true;
+          }
+
+          // Cuando estamos en zoom máximo o cerca del default, regresar el centro a X=0.
+          const upperRadiusLimit = camera.upperRadiusLimit ?? 20;
+          if (camera.radius >= upperRadiusLimit) {
+            if (newTarget.x !== 0) {
+              newTarget.x = 0;
+              modified = true;
+            }
+          } else {
+            // Al hacer zoom in, permitir paneo horizontal limitado
+            if (newTarget.x > maxPanX) {
+              newTarget.x = maxPanX;
+              modified = true;
+            } else if (newTarget.x < minPanX) {
+              newTarget.x = minPanX;
+              modified = true;
+            }
+          }
+
+          if (modified) {
+            camera.setTarget(newTarget);
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
+    }
 
     const light = new BABYLON.HemisphericLight('light', new BABYLON.Vector3(0, 1, 0), this.scene);
     light.intensity = 1.2;
@@ -268,6 +366,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     directionalLight.intensity = 0.8;
 
     this.createGround();
+    this.updateOrthoCamera();
     this.load3dModel(canvas);
 
     this.renderLoopFn = () => {
@@ -283,13 +382,21 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private onResize = (): void => {
-    if (this.engine) this.engine.resize();
+    if (this.engine) {
+      this.engine.resize();
+      this.updateOrthoCamera();
+    }
   };
 
   private dispose3d(): void {
     if (this.engine) {
       window.removeEventListener('resize', this.onResize);
       document.removeEventListener('click', this.onDocumentClick, true);
+      // remove scene observer if any
+      if (this.scene && this.cameraBeforeRenderObserver) {
+        try { this.scene.onBeforeRenderObservable.remove(this.cameraBeforeRenderObserver); } catch {}
+        this.cameraBeforeRenderObserver = null;
+      }
       this.engine.stopRenderLoop();
       this.engine.dispose();
       this.engine = null;
@@ -300,6 +407,18 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (this.renderCanvasContainer?.nativeElement) {
       this.renderCanvasContainer.nativeElement.innerHTML = '';
     }
+  }
+
+  private updateOrthoCamera(): void {
+    if (!this.camera || !this.engine || this.camera.mode !== BABYLON.Camera.ORTHOGRAPHIC_CAMERA) return;
+    const width = this.engine.getRenderWidth();
+    const height = this.engine.getRenderHeight();
+    const aspect = width / Math.max(height, 1);
+    const scale = this.orthoSize;
+    this.camera.orthoTop = scale;
+    this.camera.orthoBottom = -scale;
+    this.camera.orthoRight = scale * aspect;
+    this.camera.orthoLeft = -scale * aspect;
   }
 
   private async load3dModel(canvas: HTMLCanvasElement): Promise<void> {
@@ -320,7 +439,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       if (meshes.length === 0) return;
 
       const allNodes = new BABYLON.TransformNode('modelRoot', this.scene);
-      allNodes.rotation = new BABYLON.Vector3(-Math.PI / 2, 0, 0);
+      // Rotar el objeto 180° en Y al cargar (mantener rotación X para orientación)
+      allNodes.rotation = new BABYLON.Vector3(-Math.PI / 2, Math.PI, 0);
 
       meshes.forEach((mesh, index) => {
         mesh.isVisible = true;
@@ -392,6 +512,11 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           } else if (this.infoBox) {
             this.infoBox.style.display = 'none';
           }
+
+          // --- DEMO: seleccionar punto A y punto B con dos clics para dibujar ruta ---
+          if (pickResult.pickedPoint && this.searchModeEnabled) {
+            this.handleMapClick(pickResult.pickedPoint);
+          }
         }
       });
 
@@ -402,11 +527,178 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
   private createGround(): void {
     if (!this.scene) return;
-    const ground = BABYLON.MeshBuilder.CreateGround('ground', { width: 100, height: 100 }, this.scene);
+
+    const farSize = 220;
+    const wallHeight = 16;
+    const wallDepth = 0.5;
+
+    const ground = BABYLON.MeshBuilder.CreateGround('ground', { width: farSize, height: farSize }, this.scene);
     ground.position.y = 0.01;
     const groundMat = new BABYLON.StandardMaterial('groundMat', this.scene);
     groundMat.diffuseColor = new BABYLON.Color3(0.18, 0.18, 0.18);
+    groundMat.specularColor = new BABYLON.Color3(0, 0, 0);
     ground.material = groundMat;
+
+    const wallMat = new BABYLON.StandardMaterial('wallMat', this.scene);
+    wallMat.diffuseColor = new BABYLON.Color3(0.12, 0.12, 0.12);
+    wallMat.specularColor = new BABYLON.Color3(0, 0, 0);
+    wallMat.alpha = 0.95;
+    wallMat.backFaceCulling = false;
+
+    const createWall = (name: string, width: number, height: number): BABYLON.Mesh => {
+      const wall = BABYLON.MeshBuilder.CreatePlane(name, { width, height }, this.scene!);
+      wall.material = wallMat;
+      wall.isPickable = false;
+      return wall;
+    };
+
+    const wallDistance = farSize / 2;
+    const northWall = createWall('northWall', farSize, wallHeight);
+    northWall.position = new BABYLON.Vector3(0, wallHeight / 2, -wallDistance);
+
+    const southWall = createWall('southWall', farSize, wallHeight);
+    southWall.position = new BABYLON.Vector3(0, wallHeight / 2, wallDistance);
+    southWall.rotation = new BABYLON.Vector3(0, Math.PI, 0);
+
+    const eastWall = createWall('eastWall', farSize, wallHeight);
+    eastWall.position = new BABYLON.Vector3(wallDistance, wallHeight / 2, 0);
+    eastWall.rotation = new BABYLON.Vector3(0, Math.PI / 2, 0);
+
+    const westWall = createWall('westWall', farSize, wallHeight);
+    westWall.position = new BABYLON.Vector3(-wallDistance, wallHeight / 2, 0);
+    westWall.rotation = new BABYLON.Vector3(0, -Math.PI / 2, 0);
+  }
+
+  // ── Gestión y dibujo de rutas / flechas ─────────────────
+  private pathMeshes: BABYLON.AbstractMesh[] = [];
+
+  /**
+   * Dibuja una ruta poligonal y flechas orientadas entre los puntos proporcionados.
+   * - `points` debe ser un array de `BABYLON.Vector3` en coordenadas del mundo de la escena.
+   */
+  public drawArrowPath(points: BABYLON.Vector3[], color = new BABYLON.Color3(0.05, 0.7, 0.15)): void {
+    if (!this.scene) return;
+    this.clearPath();
+
+    if (!points || points.length < 2) return;
+
+    // Línea que une los puntos
+    const lines = BABYLON.MeshBuilder.CreateLines('pathLines', { points }, this.scene);
+    // LinesMesh soporta propiedad `color`
+    (lines as any).color = color;
+    this.pathMeshes.push(lines);
+
+    // Material para las puntas de flecha
+    const arrowMat = new BABYLON.StandardMaterial('arrowMat', this.scene);
+    arrowMat.diffuseColor = color;
+    arrowMat.emissiveColor = color;
+
+    // Crear una flecha (cono) para cada segmento apuntando hacia el siguiente punto
+    for (let i = 0; i < points.length - 1; i++) {
+      try {
+        const a = points[i];
+        const b = points[i + 1];
+        const dir = b.subtract(a);
+        const length = dir.length();
+        if (length === 0) continue;
+
+        // Posicionar la flecha en la mitad del segmento
+        const mid = a.add(dir.scale(0.5));
+
+        // Crear un cono (arrow head)
+        const head = BABYLON.MeshBuilder.CreateCylinder(`arrowHead_${i}`, {
+          height: Math.min(1.2, Math.max(0.4, length * 0.25)),
+          diameterTop: 0,
+          diameterBottom: Math.min(0.6, Math.max(0.15, length * 0.08))
+        }, this.scene);
+        head.material = arrowMat;
+        head.position = mid;
+
+        // Orientar el cono hacia el siguiente punto
+        head.lookAt(b);
+        // Ajuste: los conos se crean apuntando en +Z, rotar 90° sobre X para apuntar correctamente
+        head.rotate(new BABYLON.Vector3(1, 0, 0), Math.PI / 2, BABYLON.Space.LOCAL);
+
+        // Hacer que el cono no participe en picking/colisiones
+        head.isPickable = false;
+        head.checkCollisions = false;
+
+        this.pathMeshes.push(head);
+      } catch (e) {
+        console.warn('Error creando flecha del segmento', e);
+      }
+    }
+  }
+
+  /** Dibuja una flecha simple entre dos puntos A y B. */
+  public drawArrowBetween(a: BABYLON.Vector3, b: BABYLON.Vector3): void {
+    this.drawArrowPath([a, b]);
+  }
+
+  /** Limpia/descarta la ruta y las flechas dibujadas */
+  public clearPath(): void {
+    if (!this.scene) return;
+    while (this.pathMeshes.length > 0) {
+      const m = this.pathMeshes.pop();
+      try { m && m.dispose(); } catch (_) { /* ignore */ }
+    }
+  }
+
+  // --- Utilities para demo de selección y marcadores ---
+  private createMarker(pos: BABYLON.Vector3, color = new BABYLON.Color3(0.9, 0.2, 0.2)): BABYLON.Mesh | null {
+    if (!this.scene) return null;
+    const mat = new BABYLON.StandardMaterial('markerMat', this.scene);
+    mat.diffuseColor = color;
+    const sph = BABYLON.MeshBuilder.CreateSphere('marker', { diameter: 0.6 }, this.scene);
+    sph.material = mat;
+    sph.position = pos.clone();
+    sph.isPickable = false;
+    return sph;
+  }
+
+  private clearMarkers(): void {
+    try { if (this.startMarker) { this.startMarker.dispose(); this.startMarker = null; } } catch {}
+    try { if (this.endMarker) { this.endMarker.dispose(); this.endMarker = null; } } catch {}
+  }
+
+  private sampleLine(a: BABYLON.Vector3, b: BABYLON.Vector3, step = 1): BABYLON.Vector3[] {
+    const dir = b.subtract(a);
+    const length = dir.length();
+    if (length === 0) return [a.clone()];
+    const n = Math.max(1, Math.floor(length / step));
+    const unit = dir.normalize();
+    const pts: BABYLON.Vector3[] = [];
+    for (let i = 0; i <= n; i++) {
+      const t = Math.min(i * step, length);
+      pts.push(a.add(unit.scale(t)));
+    }
+    // asegurar punto final exacto
+    if (!pts[pts.length - 1].equals(b)) pts.push(b.clone());
+    return pts;
+  }
+
+  private handleMapClick(point: BABYLON.Vector3): void {
+    // Si no hay inicio, establecerlo
+    if (!this.selectionStart) {
+      // limpiar trazados anteriores
+      this.clearPath();
+      this.clearMarkers();
+      this.selectionStart = point.clone();
+      this.startMarker = this.createMarker(this.selectionStart, new BABYLON.Color3(0.1, 0.6, 1));
+      console.log('Start seleccionada:', this.selectionStart);
+      return;
+    }
+
+    // Si ya había inicio, tomar como fin y dibujar ruta
+    const end = point.clone();
+    this.endMarker = this.createMarker(end, new BABYLON.Color3(0.9, 0.2, 0.2));
+
+    const pathPoints = this.sampleLine(this.selectionStart, end, 1);
+    this.drawArrowPath(pathPoints);
+
+    // reset selectionStart para la próxima demo
+    this.selectionStart = null;
+    console.log('Ruta dibujada entre puntos');
   }
 
   private updateBuildingBMarkerPosition(canvas: HTMLCanvasElement): void {

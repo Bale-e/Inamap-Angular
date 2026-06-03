@@ -6,7 +6,7 @@
   <div class="view-3d" *ngIf="viewMode === '3d'">
     <div #renderCanvas class="render-canvas"></div>
 
-      <div class="floor-action">
+    <div class="floor-action">
       <button class="floor-action__button" type="button" (click)="openFloorDialog()" aria-label="Seleccionar piso">
         <span class="floor-action__ring"></span>
         <span class="floor-action__icon">{{ floorActionIcon }}</span>
@@ -17,9 +17,15 @@
         <div class="floor-action__dialog-buttons">
           <button type="button" (click)="selectFloor('first')">Primer piso</button>
           <button type="button" (click)="selectFloor('second')">Segundo piso</button>
+          <button type="button" (click)="selectFloor('third')">Tercer piso</button>
         </div>
         <button class="floor-action__dialog-close" type="button" (click)="closeFloorDialog()">Cancelar</button>
       </div>
+    </div>
+
+    <div class="cuerpo23-click-hint" [class.visible]="cuerpo23HintVisible" [style.left.px]="cuerpo23HintX" [style.top.px]="cuerpo23HintY">
+      <span class="cuerpo23-click-hint-arrow">↑</span>
+      <span>Ir al segundo piso</span>
     </div>
 
     <div class="zoom-controls">
@@ -27,4 +33,32 @@
       <button class="zoom-btn" (click)="zoomOut()" title="Alejar">-</button>
     </div>
   </div>
+
+  <!-- Fotocopiadora -->
+  <div class="marker" id="marker-foto">
+    <button class="marker__btn" (click)="toggleMarker('info-foto')">ℹ️</button>
+    <div class="marker__card" id="info-foto" style="display:none">
+      <p class="marker__nombre">Fotocopiadora y Suministros</p>
+      <p class="marker__desc">Servicio de fotocopiado y venta de materiales para estudiantes.</p>
+    </div>
+  </div>
+
+  <!-- Sala de Tutorias 1 -->
+  <div class="marker" id="marker-tuto1">
+    <button class="marker__btn" (click)="toggleMarker('info-tuto1')">ℹ️</button>
+    <div class="marker__card" id="info-tuto1" style="display:none">
+      <p class="marker__nombre">Sala de Tutorías 1</p>
+      <p class="marker__desc">Espacio de apoyo académico con tutores disponibles.</p>
+    </div>
+  </div>
+
+  <!-- Sala de Tutorias 2 -->
+  <div class="marker" id="marker-tuto2">
+    <button class="marker__btn" (click)="toggleMarker('info-tuto2')">ℹ️</button>
+    <div class="marker__card" id="info-tuto2" style="display:none">
+      <p class="marker__nombre">Sala de Tutorías 2</p>
+      <p class="marker__desc">Espacio de apoyo académico con tutores disponibles.</p>
+    </div>
+  </div>
+
 </div>

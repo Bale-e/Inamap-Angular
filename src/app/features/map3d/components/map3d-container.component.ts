@@ -1,3 +1,8 @@
+/*
+  Componente del visor 3D (Map3dContainerComponent).
+  Descripción: inicializa la escena BabylonJS, carga modelos OBJ, gestiona interacción (clics, zoom,
+  búsqueda de rutas) y dibuja guías/flechas basadas en datos de navegación.
+*/
 import { Component, AfterViewInit, OnDestroy, ElementRef, ViewChild } from '@angular/core';
 import * as BABYLON from 'babylonjs';
 import 'babylonjs-loaders';
@@ -293,7 +298,14 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     canvas.className = 'babylon-canvas';
     canvas.style.width = '100%';
     canvas.style.height = '100%';
-    canvas.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
+
+    // Evitar que la rueda del ratón haga scroll en la página cuando el cursor está sobre el canvas
+    const wheelHandler = (e: WheelEvent) => { e.preventDefault(); e.stopPropagation(); };
+    // Prevención local sobre el canvas
+    canvas.addEventListener('wheel', (e) => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
+    // Añadir/remover captura global cuando el ratón entra/sale del canvas para bloquear desplazamiento de la página
+    canvas.addEventListener('mouseenter', () => document.addEventListener('wheel', wheelHandler, { passive: false, capture: true }));
+    canvas.addEventListener('mouseleave', () => document.removeEventListener('wheel', wheelHandler, { capture: true }));
 
     canvasContainer.innerHTML = '';
     canvasContainer.appendChild(canvas);
@@ -313,10 +325,13 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.camera.lowerBetaLimit = 0.01;
     this.camera.upperBetaLimit = Math.PI / 2;
 
-    // Permitir movimiento horizontal en X solo cuando se haya hecho zoom in
+    // Permitir movimiento horizontal en X solo cuando se haya hecho zoom suficiente (>=30%)
     const fixedCameraY = 0;
     const maxPanX = 5;
     const minPanX = -5;
+    const orthoMin = 4; // tamaño ortho más cercano (zoom máximo)
+    const orthoMax = 18; // tamaño ortho más lejano (zoom mínimo)
+
     if (this.scene) {
       this.cameraBeforeRenderObserver = this.scene.onBeforeRenderObservable.add(() => {
         const camera = this.camera;
@@ -332,15 +347,28 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
             modified = true;
           }
 
-          // Cuando estamos en zoom máximo o cerca del default, regresar el centro a X=0.
-          const upperRadiusLimit = camera.upperRadiusLimit ?? 20;
-          if (camera.radius >= upperRadiusLimit) {
+          // Determinar si se permite paneo horizontal según el nivel de zoom
+          let allowPan = false;
+          if (camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
+            const clamped = Math.min(Math.max(this.orthoSize, orthoMin), orthoMax);
+            const zoomPercent = (orthoMax - clamped) / (orthoMax - orthoMin); // 0..1
+            allowPan = zoomPercent >= 0.3; // permitir paneo a partir de 30% de zoom
+          } else {
+            const lower = camera.lowerRadiusLimit ?? 1;
+            const upper = camera.upperRadiusLimit ?? 100;
+            const clampedRad = Math.min(Math.max(camera.radius, lower), upper);
+            const zoomPercent = (upper - clampedRad) / Math.max(upper - lower, 1);
+            allowPan = zoomPercent >= 0.3;
+          }
+
+          if (!allowPan) {
+            // si no está permitido paneo, centrar X en 0
             if (newTarget.x !== 0) {
               newTarget.x = 0;
               modified = true;
             }
           } else {
-            // Al hacer zoom in, permitir paneo horizontal limitado
+            // limitar paneo horizontal dentro de rangos
             if (newTarget.x > maxPanX) {
               newTarget.x = maxPanX;
               modified = true;
@@ -477,6 +505,15 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       console.log('==== NOMBRES DE CUERPOS ====');
       meshes.forEach((mesh) => console.log('CUERPO:', mesh.name));
 
+      // Dibujar un ejemplo de NavPath para pruebas usando datos reales + inventados
+      try {
+        const example = this.createExampleNavPathForEdificioAFirstFloor();
+        // start desde 'B' (pasillo central que conecta con Edificio B) y target 'Elevator'
+        this.drawFromNavPath(example, 'B', 'Elevator');
+      } catch (e) {
+        console.warn('No se pudo generar el NavPath de ejemplo:', e);
+      }
+
 
 
       // ── Click — detectar clic en cuerpo o suelo y imprimir coordenadas ──
@@ -523,6 +560,37 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     } catch (error) {
       console.error('No se pudo cargar el modelo 3D:', error);
     }
+  }
+
+  /** Construye un objeto navPath de ejemplo para el primer piso del Edificio A. */
+  private createExampleNavPathForEdificioAFirstFloor(): any {
+    // Coordenadas aproximadas (x, y, z) en el espacio de la escena — mezclamos puntos reales conocidos
+    // con puntos inventados para probar el sistema.
+    return {
+      building: 'Edificio A',
+      floor: 'first',
+      accesses: {
+        // Punto B: acceso al pasillo central hacia Edificio B
+        'B': [[-11.51, 0.01, -1.63]],
+        // Salidas a la izquierda/derecha del pasillo central
+        'C': [[-13.0, 0.01, -0.5]],
+        'D': [[-10.0, 0.01, -0.5]],
+        // Entrada principal al edificio A (conecta al mapa principal)
+        'MainEntrance': [[-5.0, 0.01, 2.0]]
+      },
+      // Puntos donde el pasillo principal dobla (se usan para trazar la guía)
+      turns: [
+        [-11.51, 0.01, -1.63], // inicio pasillo (B)
+        [-11.51, 0.01, -3.0],  // tramo hacia el final (frente al ascensor)
+        [-11.51, 0.01, -5.0]
+      ],
+      // Puntos de interés (salas, baños, ascensor, escaleras)
+      pois: {
+        'Elevator': [-11.51, 0.01, -5.5],
+        'BathroomWomen': [-10.5, 0.01, -2.8],
+        'Room101': [-12.2, 0.01, -1.2]
+      }
+    };
   }
 
   private createGround(): void {
@@ -675,6 +743,116 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     // asegurar punto final exacto
     if (!pts[pts.length - 1].equals(b)) pts.push(b.clone());
     return pts;
+  }
+
+  // ── Nuevas utilidades para dibujar rutas a partir de documentos "navigation paths" ──
+  private coordToVec3(coord: number[] | undefined): BABYLON.Vector3 | null {
+    if (!coord || coord.length < 3) return null;
+    return new BABYLON.Vector3(coord[0], coord[1], coord[2]);
+  }
+
+  private distancePointToSegment(p: BABYLON.Vector3, a: BABYLON.Vector3, b: BABYLON.Vector3): number {
+    const ab = b.subtract(a);
+    const ap = p.subtract(a);
+    const abLen2 = ab.lengthSquared();
+    if (abLen2 === 0) return ap.length();
+    const t = Math.max(0, Math.min(1, BABYLON.Vector3.Dot(ap, ab) / abLen2));
+    const proj = a.add(ab.scale(t));
+    return p.subtract(proj).length();
+  }
+
+  /**
+   * Dibuja una ruta basada en la estructura de un documento "navPath".
+   * navPath: { building, floor, accesses: {name:[[x,y,z],...]}, turns:[[x,y,z],...], pois: {name:[x,y,z]} }
+   * startAccessName: clave dentro de accesses para punto de inicio (opcional)
+   * targetPoiName: clave dentro de pois que indica destino final (opcional)
+   */
+  public drawFromNavPath(navPath: any, startAccessName?: string, targetPoiName?: string): void {
+    if (!this.scene || !navPath) return;
+
+    const accesses = navPath.accesses || {};
+    const turns = Array.isArray(navPath.turns) ? navPath.turns : [];
+    const pois = navPath.pois || {};
+
+    // Convertir turns a Vector3
+    const turnVecs: BABYLON.Vector3[] = turns.map((c: number[]) => this.coordToVec3(c)).filter(Boolean) as BABYLON.Vector3[];
+
+    // Obtener coords de accesses: elegir la primera coordenada disponible por acceso
+    const accessEntries: { name: string; coord: BABYLON.Vector3 }[] = Object.keys(accesses).map(k => {
+      const arr = Array.isArray(accesses[k]) ? accesses[k] : [];
+      const coord = this.coordToVec3(arr[0]);
+      return { name: k, coord };
+    }).filter(x => x.coord) as { name: string; coord: BABYLON.Vector3 }[];
+
+    // Determinar punto de inicio
+    let startPoint: BABYLON.Vector3 | null = null;
+    if (startAccessName && accesses[startAccessName] && accesses[startAccessName].length > 0) {
+      startPoint = this.coordToVec3(accesses[startAccessName][0]);
+    } else if (accessEntries.length > 0) {
+      startPoint = accessEntries[0].coord.clone();
+    }
+
+    // Determinar target POI
+    let targetPoi: BABYLON.Vector3 | null = null;
+    if (targetPoiName && pois[targetPoiName]) {
+      targetPoi = this.coordToVec3(pois[targetPoiName]);
+    }
+
+    // Construir polyline: start -> turns -> nearest access to target (si existe) o el resto de accesses
+    const path: BABYLON.Vector3[] = [];
+    if (startPoint) path.push(startPoint.clone());
+    // agregar turns
+    for (const t of turnVecs) path.push(t.clone());
+
+    // Si hay targetPoi, elegir el access más cercano a targetPoi como posible final
+    if (targetPoi && accessEntries.length > 0) {
+      let best = accessEntries[0];
+      let bestDist = this.distancePointToSegment(targetPoi, accessEntries[0].coord, accessEntries[0].coord);
+      for (const a of accessEntries) {
+        const d = targetPoi.subtract(a.coord).length();
+        if (d < bestDist) { best = a; bestDist = d; }
+      }
+      path.push(best.coord.clone());
+    } else {
+      // si no hay target, agregar los demás accesses en orden
+      for (const a of accessEntries) {
+        // evitar duplicar el inicio
+        if (!startPoint || !a.coord.equals(startPoint)) path.push(a.coord.clone());
+      }
+    }
+
+    // Ahora recorrer segmentos y, si encontramos que el targetPoi está suficientemente cerca de algún segmento,
+    // desviar hacia ese POI y terminar la ruta allí.
+    if (targetPoi) {
+      const finalPath: BABYLON.Vector3[] = [];
+      for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        finalPath.push(a.clone());
+        const dist = this.distancePointToSegment(targetPoi, a, b);
+        const THRESH = 1.2; // umbral de intersección en unidades del mundo
+        if (dist <= THRESH) {
+          // insertar proyección aproximada como punto de giro hacia el POI
+          // calcular proyección t
+          const ab = b.subtract(a);
+          const ap = targetPoi.subtract(a);
+          const t = Math.max(0, Math.min(1, BABYLON.Vector3.Dot(ap, ab) / Math.max(ab.lengthSquared(), 1e-6)));
+          const proj = a.add(ab.scale(t));
+          finalPath.push(proj);
+          finalPath.push(targetPoi.clone());
+          // terminar ruta
+          this.drawArrowPath(finalPath);
+          return;
+        }
+      }
+      // si no se desvió hacia POI, añadir último punto y dibujar todo
+      finalPath.push(path[path.length - 1].clone());
+      this.drawArrowPath(finalPath);
+      return;
+    }
+
+    // Si no hay POI objetivo, dibujar la polyline tal cual
+    this.drawArrowPath(path);
   }
 
   private handleMapClick(point: BABYLON.Vector3): void {

@@ -1,3 +1,7 @@
+/**
+ * Servicio de acceso a Firebase/Firestore.
+ * Descripción: encapsula las consultas a colecciones como `Edificios`, `Locaciones` y `navigation_paths`.
+ */
 import { Injectable } from '@angular/core';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, query, where } from 'firebase/firestore';

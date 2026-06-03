@@ -1,3 +1,8 @@
+/*
+  Pruebas unitarias del servicio Firebase.
+  Descripción: contiene tests para verificar que las consultas a Firestore funcionan según lo esperado.
+*/
+
 /// <reference types="jasmine" />
 import { TestBed } from '@angular/core/testing';
 

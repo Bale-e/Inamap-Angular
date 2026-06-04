@@ -41,6 +41,16 @@ export class Firebase {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
+  async getLocacionPorNombre(edificioId: string, piso: string, nombre: string) {
+    const q = query(
+      collection(db, `Edificios/${edificioId}/Locaciones`),
+      where('Piso', '==', piso),
+      where('Nombre', '==', nombre)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.length ? { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } : null;
+  }
+
   async getNavigationPaths() {
     const snapshot = await getDocs(collection(db, 'navigation_paths'));
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));

@@ -185,17 +185,17 @@
 /* (removed unused keyframes to reduce bundle size) */
 
 .zoom-btn {
-  width: 40px;
-  height: 40px;
-  font-size: 22px;
+  width: 80px;
+  height: 80px;
+  font-size: 32px;
   font-weight: bold;
   background: rgb(255, 255, 255);
   color: black;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 8px;
+  border-radius: 12px;
   cursor: pointer;
   backdrop-filter: blur(4px);
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -203,7 +203,89 @@
   &:hover {
     background: rgba(255, 255, 255, 0.28);
     border-color: rgba(255, 255, 255, 0.6);
+    transform: translateY(-1px);
   }
+}
+
+.zoom-btn[disabled] {
+  background: rgba(255, 255, 255, 0.22);
+  color: rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.15);
+  cursor: not-allowed;
+}
+
+.search-menu {
+  position: absolute;
+  right: 20px;
+  bottom: 120px;
+  width: 320px;
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(18, 18, 18, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.search-menu__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.search-menu__close {
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.search-menu__input {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  outline: none;
+  font-size: 14px;
+}
+
+.search-menu__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.search-menu__item {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  text-align: left;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.search-menu__item:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.search-menu__empty {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 13px;
+  margin: 0;
 }
 
 /* Map control (view buttons) */

@@ -16,6 +16,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   viewMode: '2d' | '3d' = '2d';
   private readonly firstFloorModel = 'Edifico A - Piso 1.obj';
   private readonly secondFloorModel = 'Edificio A - piso 2.obj';
+  private readonly thirdFloorModel = 'Edificio A - piso 3.obj';
   currentFloor = this.firstFloorModel;
 
   private engine: BABYLON.Engine | null = null;
@@ -42,12 +43,12 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   // Abre la consola del navegador en modo 3D para ver los nombres reales
   private infoData: { [key: string]: { nombre: string, desc: string } } = {
     'Cuerpo3':  { nombre: 'Sala de Tutorías 2',          desc: 'Espacio de apoyo académico con tutores disponibles.' },
-    'Cuerpo14': { nombre: 'Sala de Tutorías 1',          desc: 'Espacio de apoyo académico con tutores disponibles.' },
-    'Cuerpo21': { nombre: 'Fotocopiadora y Suministros', desc: 'Servicio de fotocopiado y venta de materiales para estudiantes.' }
+    'Cuerpo29': { nombre: 'Sala de Tutorías 1',          desc: 'Espacio de apoyo académico con tutores disponibles.' },
+    'Cuerpo13': { nombre: 'Fotocopiadora y Suministros', desc: 'Servicio de fotocopiado y venta de materiales para estudiantes.' }
   };
 
   // ── Cuerpos que abren el diálogo de selección de piso ────
-  private floorSelectionBodies = ['Cuerpo23', 'Cuerpo29', 'Cuerpo15', 'Cuerpo20'];
+  private floorSelectionBodies = ['Cuerpo23', 'Cuerpo14', 'Cuerpo19', 'Cuerpo25', 'Cuerpo30', 'Cuerpo28', 'Cuerpo8'];
 
   constructor(private http: HttpClient) {}
 
@@ -78,7 +79,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     document.body.appendChild(this.infoBox);
   }
 
-  // ── Crea la flecha para ir al piso dos ───────────────────
+  // ── Crea la flecha para ir a selección de piso ───────────────────
   private createFloorArrow(): void {
     this.floorArrow = document.createElement('div');
     this.floorArrow.style.cssText = `
@@ -93,7 +94,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       z-index: 1001;
       pointer-events: none;
     `;
-    this.floorArrow.innerHTML = '→ Ir al piso dos';
+    this.floorArrow.innerHTML = '→ Ir al piso';
     document.body.appendChild(this.floorArrow);
   }
 
@@ -113,7 +114,6 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       cursor: pointer;
       transition: background-color 0.2s;
     `;
-    this.buildingBMarker.innerHTML = '→ Ir al Edificio B - Piso 1';
     this.buildingBMarker.addEventListener('mouseenter', () => {
       if (this.buildingBMarker) {
         this.buildingBMarker.style.backgroundColor = 'rgba(0,0,0,0.95)';
@@ -126,7 +126,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     });
     this.buildingBMarker.addEventListener('click', (e) => {
       e.stopPropagation();
-      console.log('Navegando a Edificio B - Piso 1');
+      const floorLabel = this.currentFloor === this.secondFloorModel ? '2'
+        : this.currentFloor === this.thirdFloorModel ? '3'
+        : '1';
+      console.log(`Navegando a Edificio B - Piso ${floorLabel}`);
     });
     document.body.appendChild(this.buildingBMarker);
   }
@@ -199,7 +202,13 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   get floorActionLabel(): string {
-    return this.currentFloor === this.secondFloorModel ? 'Ir al primer piso' : 'Ir al segundo piso';
+    if (this.currentFloor === this.secondFloorModel) {
+      return 'Ir al primer piso';
+    }
+    if (this.currentFloor === this.thirdFloorModel) {
+      return 'Ir al primer piso';
+    }
+    return 'Ir al segundo piso';
   }
 
   get floorActionIcon(): string {
@@ -210,9 +219,13 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.floorDialogVisible = true;
   }
 
-  selectFloor(floor: 'first' | 'second'): void {
+  selectFloor(floor: 'first' | 'second' | 'third'): void {
     this.floorDialogVisible = false;
-    const targetFloor = floor === 'first' ? this.firstFloorModel : this.secondFloorModel;
+    const targetFloor = floor === 'first'
+      ? this.firstFloorModel
+      : floor === 'second'
+        ? this.secondFloorModel
+        : this.thirdFloorModel;
 
     if (this.currentFloor !== targetFloor) {
       this.currentFloor = targetFloor;
@@ -371,12 +384,23 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           console.log(`Clic en: ${target}, Coordenadas: (${coords?.x.toFixed(2)}, ${coords?.y.toFixed(2)}, ${coords?.z.toFixed(2)})`);
 
           // ── Abrir diálogo de selección de piso si es uno de los cuerpos especificados ──
-          if (pickResult.pickedMesh && this.floorSelectionBodies.includes(pickResult.pickedMesh.name)) {
+          const shouldOpenFloorDialog = pickResult.pickedMesh && this.floorSelectionBodies.includes(pickResult.pickedMesh.name) &&
+            !(this.currentFloor === this.secondFloorModel &&
+              (pickResult.pickedMesh.name === 'Cuerpo14' || pickResult.pickedMesh.name === 'Cuerpo19'));
+
+          if (shouldOpenFloorDialog) {
             this.openFloorDialog();
           }
 
-          // ── Mostrar infoBox si hay info para el mesh clicado ──
-          if (pickResult.pickedMesh && this.infoBox) {
+          const hideFloor2Tags = pickResult.pickedMesh?.name &&
+            this.currentFloor === this.secondFloorModel &&
+            (pickResult.pickedMesh.name === 'Cuerpo29' || pickResult.pickedMesh.name === 'Cuerpo13');
+
+          if (hideFloor2Tags) {
+            if (this.infoBox) {
+              this.infoBox.style.display = 'none';
+            }
+          } else if (pickResult.pickedMesh && this.infoBox) {
             const info = this.infoData[pickResult.pickedMesh.name];
             if (info) {
               this.infoBox.innerHTML = `
@@ -412,12 +436,14 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private updateBuildingBMarkerPosition(canvas: HTMLCanvasElement): void {
     if (!this.buildingBMarker || !this.scene || !this.camera || !this.engine) return;
 
-    // Solo mostrar el marcador si estamos en el piso 1 en vista 3D
-    const isFirstFloor = this.currentFloor === this.firstFloorModel;
-    if (!isFirstFloor || this.viewMode !== '3d') {
+    const isVisibleFloor = this.currentFloor === this.firstFloorModel || this.currentFloor === this.secondFloorModel;
+    if (!isVisibleFloor || this.viewMode !== '3d') {
       this.buildingBMarker.style.display = 'none';
       return;
     }
+
+    const floorLabel = this.currentFloor === this.secondFloorModel ? '2' : '1';
+    this.buildingBMarker.innerHTML = `→ Ir al Edificio B - Piso ${floorLabel}`;
 
     // Centro calculado de los 4 puntos:
     // (-12.42, 0.01, -0.35), (-10.62, 0.01, -0.29), (-10.69, 0.01, -2.93), (-12.31, 0.01, -2.95)

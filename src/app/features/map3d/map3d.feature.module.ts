@@ -1,3 +1,7 @@
+/*
+  Módulo de la funcionalidad del mapa 3D.
+  Descripción: declara e importa el componente que renderiza la vista 3D (BabylonJS).
+*/
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClientModule } from '@angular/common/http';

@@ -7,6 +7,11 @@
   color: #fff;
 }
 
+/*
+  Estilos para `Map3dContainerComponent`.
+  Descripción: define la maquetación del visor 2D/3D, controles y marcadores en pantalla.
+*/
+
 .map-body {
   width: 100%;
   height: 100%;
@@ -177,16 +182,7 @@
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
-@keyframes floor-action-pulse {
-  0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.16);
-  }
-  50% {
-    transform: scale(1.02);
-    box-shadow: 0 16px 28px rgba(0, 0, 0, 0.2);
-  }
-}
+/* (removed unused keyframes to reduce bundle size) */
 
 .zoom-btn {
   width: 40px;
@@ -209,3 +205,60 @@
     border-color: rgba(255, 255, 255, 0.6);
   }
 }
+
+/* Map control (view buttons) */
+.map-control {
+  padding: 0.6rem;
+  display: flex;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  background: #1d1d1d;
+  border-bottom: 1px solid #2f2f2f;
+}
+
+.view-btn {
+  border: 0;
+  border-radius: 4px;
+  font-weight: 600;
+  padding: 0.45rem 0.8rem;
+  background-color: #3178c6;
+  color: white;
+  cursor: pointer;
+}
+
+.view-btn[disabled] { background-color: #999; cursor: not-allowed; }
+
+/* Cuerpo hint */
+.cuerpo23-click-hint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -100%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: rgba(35, 37, 40, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 20;
+  transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+.cuerpo23-click-hint.visible { opacity: 1; transform: translate(-50%, -110%); }
+
+.cuerpo23-click-hint-arrow { font-size: 16px; line-height: 1; }
+
+/* Marker cards */
+.marker { position: absolute; z-index: 5; }
+.marker__btn { border: 0; background: transparent; cursor: pointer; }
+.marker__card { position: absolute; background: rgba(255,255,255,0.98); color: #111; padding: 8px 10px; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+.marker__nombre { font-weight:700; margin:0 0 4px; }
+.marker__desc { margin:0; font-size:12px; }
+

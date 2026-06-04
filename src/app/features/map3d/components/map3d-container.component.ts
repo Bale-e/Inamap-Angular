@@ -79,6 +79,20 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.createInfoBox();
     this.createFloorArrow();
     this.createBuildingBMarker();
+    this.printFirebaseNavigationData();
+  }
+
+  private async printFirebaseNavigationData(): Promise<void> {
+    try {
+      const [navigationPaths, rutas] = await Promise.all([
+        this.firebaseService.getNavigationPaths(),
+        this.firebaseService.getRutas()
+      ]);
+      console.log('printFirebaseNavigationData - navigation_paths:', navigationPaths);
+      console.log('printFirebaseNavigationData - rutas:', rutas);
+    } catch (error) {
+      console.error('Error imprimiendo datos de Firebase:', error);
+    }
   }
 
   // ── Crea el cuadro de info flotante ──────────────────────
@@ -597,8 +611,11 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           console.log(`Clic en: ${target}, Coordenadas: (${coords?.x.toFixed(2)}, ${coords?.y.toFixed(2)}, ${coords?.z.toFixed(2)})`);
 
           // ── Abrir diálogo de selección de piso solo en el primer piso de Edificio A
-          if (pickResult.pickedMesh && this.currentFloor === this.firstFloorModel && this.floorSelectionBodies.includes(pickResult.pickedMesh.name)) {
+          const isFloorTrigger = pickResult.pickedMesh && this.currentFloor === this.firstFloorModel && this.floorSelectionBodies.includes(pickResult.pickedMesh.name);
+          if (isFloorTrigger) {
             this.openFloorDialog();
+          } else {
+            this.closeFloorDialog();
           }
 
           // ── Mostrar infoBox si hay info para el mesh clicado ──
@@ -638,8 +655,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     const ground = BABYLON.MeshBuilder.CreateGround('ground', { width: farSize, height: farSize }, this.scene);
     ground.position.y = 0.01;
     const groundMat = new BABYLON.StandardMaterial('groundMat', this.scene);
-    groundMat.diffuseColor = new BABYLON.Color3(0.18, 0.18, 0.18);
-    groundMat.specularColor = new BABYLON.Color3(0, 0, 0);
+    groundMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+    groundMat.specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
     ground.material = groundMat;
 
     const wallMat = new BABYLON.StandardMaterial('wallMat', this.scene);

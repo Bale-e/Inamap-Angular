@@ -53,11 +53,15 @@ export class Firebase {
 
   async getNavigationPaths() {
     const snapshot = await getDocs(collection(db, 'navigation_paths'));
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    console.log('getNavigationPaths:', results);
+    return results;
   }
 
   async getRutas() {
     const snapshot = await getDocs(collection(db, 'rutas'));
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    console.log('getRutas:', results);
+    return results;
   }
 }

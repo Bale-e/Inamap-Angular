@@ -35,7 +35,21 @@
 
     <div class="zoom-controls">
       <button class="zoom-btn" (click)="zoomIn()" title="Acercar">+</button>
-      <button class="zoom-btn" (click)="zoomOut()" title="Alejar">-</button>
+      <button class="zoom-btn" (click)="zoomOut()" title="Alejar" [disabled]="!zoomOutEnabled">-</button>
+    </div>
+
+    <div class="search-menu" *ngIf="searchModeEnabled">
+      <div class="search-menu__header">
+        <span>Buscar destino</span>
+        <button type="button" class="search-menu__close" (click)="toggleSearchMode()">✕</button>
+      </div>
+      <input type="text" class="search-menu__input" placeholder="Escribe o elige un destino" [(ngModel)]="searchQuery" (input)="filterSearchOptions()" />
+      <div class="search-menu__list">
+        <button type="button" class="search-menu__item" *ngFor="let option of filteredDestinations" (click)="selectDestination(option)">
+          {{ option }}
+        </button>
+        <p class="search-menu__empty" *ngIf="filteredDestinations.length === 0">No se encontró ningún destino.</p>
+      </div>
     </div>
   </div>
 
@@ -63,6 +77,24 @@
     <div class="marker__card" id="info-tuto2" style="display:none">
       <p class="marker__nombre">Sala de Tutorías 2</p>
       <p class="marker__desc">Espacio de apoyo académico con tutores disponibles.</p>
+    </div>
+  </div>
+
+  <!-- Sala de Tutorias 3 -->
+  <div class="marker" id="marker-tuto3">
+    <button class="marker__btn" (click)="toggleMarker('info-tuto3')">ℹ️</button>
+    <div class="marker__card" id="info-tuto3" style="display:none">
+      <p class="marker__nombre">Sala de Tutorías 3</p>
+      <p class="marker__desc">Espacio adicional de tutorías con capacidad para grupos pequeños.</p>
+    </div>
+  </div>
+
+  <!-- Sala de Tutorias 4 -->
+  <div class="marker" id="marker-tuto4">
+    <button class="marker__btn" (click)="toggleMarker('info-tuto4')">ℹ️</button>
+    <div class="marker__card" id="info-tuto4" style="display:none">
+      <p class="marker__nombre">Sala de Tutorías 4</p>
+      <p class="marker__desc">Sala de apoyo académico y reuniones estudiantiles.</p>
     </div>
   </div>
 

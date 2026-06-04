@@ -4,6 +4,7 @@
 */
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
 import { Map3dContainerComponent } from './components/map3d-container.component';
 
@@ -11,6 +12,7 @@ import { Map3dContainerComponent } from './components/map3d-container.component'
   declarations: [Map3dContainerComponent],
   imports: [
     CommonModule,
+    FormsModule,
     HttpClientModule
   ],
   exports: [Map3dContainerComponent]

@@ -7,6 +7,8 @@ import { Component, AfterViewInit, OnDestroy, ElementRef, ViewChild } from '@ang
 import * as BABYLON from 'babylonjs';
 import 'babylonjs-loaders';
 import { HttpClient } from '@angular/common/http';
+import { Firebase } from '../../../services/firebase';
+import { dibujarFlechaGuia } from '../../../services/flecha_guía';
 
 @Component({
   selector: 'app-map3d',
@@ -29,13 +31,19 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private camera: BABYLON.ArcRotateCamera | null = null;
   private cameraBeforeRenderObserver: BABYLON.Nullable<BABYLON.Observer<BABYLON.Scene>> = null;
   private renderLoopFn: (() => void) | null = null;
-  private orthoSize = 9;
+  private orthoSize = 8;
+  private readonly defaultOrthoSize = 9;
   private searchModeEnabled = false;
+  private zoomOutEnabled = false;
   private bannerControlsAttached = false;
   private infoBox: HTMLDivElement | null = null;
   private floorArrow: HTMLDivElement | null = null;
   private buildingBMarker: HTMLDivElement | null = null;
   floorDialogVisible = false;
+  searchQuery = '';
+  destinationOptions: string[] = ['Fotocopiadora', 'Sala de Tutorías 1', 'Sala de Tutorías 2', 'Sala de Tutorías 3', 'Sala de Tutorías 4', 'Ascensor'];
+  filteredDestinations: string[] = [...this.destinationOptions];
+  selectedDestination: string | null = null;
 
   private onDocumentClick = (evt: MouseEvent): void => {
     if (this.infoBox) {
@@ -47,23 +55,23 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   };
 
   // Estado y marcadores para demo de ruta
-  private selectionStart: BABYLON.Vector3 | null = null;
-  private startMarker: BABYLON.Mesh | null = null;
-  private endMarker: BABYLON.Mesh | null = null;
-
   // ── Información de cada cuerpo ──────────────────────────
   // IMPORTANTE: los keys deben coincidir con mesh.name del OBJ
   // Abre la consola del navegador en modo 3D para ver los nombres reales
   private infoData: { [key: string]: { nombre: string, desc: string } } = {
-    'Cuerpo3':  { nombre: 'Sala de Tutorías 2',          desc: 'Espacio de apoyo académico con tutores disponibles.' },
+    'Cuerpo13': { nombre: 'Fotocopiadora y Suministros', desc: 'Servicio de fotocopiado y venta de materiales para estudiantes.' },
     'Cuerpo29': { nombre: 'Sala de Tutorías 1',          desc: 'Espacio de apoyo académico con tutores disponibles.' },
-    'Cuerpo13': { nombre: 'Fotocopiadora y Suministros', desc: 'Servicio de fotocopiado y venta de materiales para estudiantes.' }
+    'Cuerpo30': { nombre: 'Sala de Tutorías 2',          desc: 'Espacio de apoyo académico con tutores disponibles.' },
+    'Cuerpo28': { nombre: 'Sala de Tutorías 3',          desc: 'Espacio adicional de tutorías con capacidad para grupos pequeños.' },
+    'Cuerpo27': { nombre: 'Sala de Tutorías 4',          desc: 'Sala de apoyo académico y reuniones estudiantiles.' }
   };
 
-  // ── Cuerpos que abren el diálogo de selección de piso ────
-  private floorSelectionBodies = ['Cuerpo23', 'Cuerpo14', 'Cuerpo19', 'Cuerpo25', 'Cuerpo30', 'Cuerpo28', 'Cuerpo8'];
+  // ── Cuerpos del primer piso de Edificio A que abren el diálogo de selección de piso ────
+  private floorSelectionBodies = ['Cuerpo21', 'Cuerpo14', 'Cuerpo19', 'Cuerpo25'];
 
-  constructor(private http: HttpClient) {}
+  private readonly mainEntranceAccess = new BABYLON.Vector3(11.22, 0.01, 0.12);
+
+  constructor(private http: HttpClient, private firebaseService: Firebase) {}
 
   ngAfterViewInit(): void {
     this.ensureLoaders();
@@ -71,6 +79,20 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.createInfoBox();
     this.createFloorArrow();
     this.createBuildingBMarker();
+    this.printFirebaseNavigationData();
+  }
+
+  private async printFirebaseNavigationData(): Promise<void> {
+    try {
+      const [navigationPaths, rutas] = await Promise.all([
+        this.firebaseService.getNavigationPaths(),
+        this.firebaseService.getRutas()
+      ]);
+      console.log('printFirebaseNavigationData - navigation_paths:', navigationPaths);
+      console.log('printFirebaseNavigationData - rutas:', rutas);
+    } catch (error) {
+      console.error('Error imprimiendo datos de Firebase:', error);
+    }
   }
 
   // ── Crea el cuadro de info flotante ──────────────────────
@@ -92,7 +114,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     document.body.appendChild(this.infoBox);
   }
 
-  // ── Crea la flecha para ir a selección de piso ───────────────────
+  // ── Crea la flecha para ir al piso dos ───────────────────
   private createFloorArrow(): void {
     this.floorArrow = document.createElement('div');
     this.floorArrow.style.cssText = `
@@ -107,7 +129,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       z-index: 1001;
       pointer-events: none;
     `;
-    this.floorArrow.innerHTML = '→ Ir al piso';
+    this.floorArrow.innerHTML = '→ Ir al piso dos';
     document.body.appendChild(this.floorArrow);
   }
 
@@ -127,6 +149,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       cursor: pointer;
       transition: background-color 0.2s;
     `;
+    this.buildingBMarker.innerHTML = '→ Ir al Edificio B - Piso 1';
     this.buildingBMarker.addEventListener('mouseenter', () => {
       if (this.buildingBMarker) {
         this.buildingBMarker.style.backgroundColor = 'rgba(0,0,0,0.95)';
@@ -139,10 +162,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     });
     this.buildingBMarker.addEventListener('click', (e) => {
       e.stopPropagation();
-      const floorLabel = this.currentFloor === this.secondFloorModel ? '2'
-        : this.currentFloor === this.thirdFloorModel ? '3'
-        : '1';
-      console.log(`Navegando a Edificio B - Piso ${floorLabel}`);
+      console.log('Navegando a Edificio B - Piso 1');
     });
     document.body.appendChild(this.buildingBMarker);
   }
@@ -203,8 +223,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (view3DBtn) view3DBtn.disabled = this.viewMode === '3d';
     if (searchPlaceBtn) {
       searchPlaceBtn.disabled = this.viewMode !== '3d';
-      searchPlaceBtn.textContent = this.searchModeEnabled ? 'Buscar lugar (activo)' : 'Buscar lugar';
+      searchPlaceBtn.textContent = 'Buscar lugar';
     }
+    this.updateZoomButtons();
   }
 
   private toggleSearchMode(): void {
@@ -212,11 +233,72 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       this.setView('3d');
     }
     this.searchModeEnabled = !this.searchModeEnabled;
-    if (!this.searchModeEnabled) {
+    if (this.searchModeEnabled) {
+      this.searchQuery = '';
+      this.filteredDestinations = [...this.destinationOptions];
+    } else {
       this.clearPath();
       this.clearMarkers();
     }
     this.updateBannerButtons();
+  }
+
+  filterSearchOptions(): void {
+    const query = this.searchQuery.trim().toLowerCase();
+    this.filteredDestinations = this.destinationOptions.filter(option =>
+      option.toLowerCase().includes(query)
+    );
+  }
+
+  selectDestination(destination: string): void {
+    this.selectedDestination = destination;
+    this.searchQuery = destination;
+    this.searchModeEnabled = false;
+    this.searchDestination(destination);
+    this.updateBannerButtons();
+  }
+
+  private async searchDestination(destination: string): Promise<void> {
+    const location = await this.firebaseService.getLocacionPorNombre('Edificio A', '1', destination);
+    const coordinate = this.extractCoordinateFromLocation(location);
+    this.clearPath();
+    this.clearMarkers();
+    if (coordinate) {
+      if (this.scene) {
+        this.pathMeshes.push(...dibujarFlechaGuia(this.scene, this.mainEntranceAccess, coordinate));
+      }
+      return;
+    }
+
+    console.warn(`No se encontró coordenada para destino: ${destination}`);
+  }
+
+  private extractCoordinateFromLocation(location: any): BABYLON.Vector3 | null {
+    if (!location) return null;
+    const coord = location.Coordenadas || location.coordenadas || location.coords || location.coordinates || location.coordenada;
+    if (Array.isArray(coord) && coord.length >= 3 && coord.every((v: any) => typeof v === 'number')) {
+      return new BABYLON.Vector3(coord[0], coord[1], coord[2]);
+    }
+    if (coord && typeof coord === 'object' && coord.x != null && coord.y != null && coord.z != null) {
+      return new BABYLON.Vector3(coord.x, coord.y, coord.z);
+    }
+    if (location.x != null && location.y != null && location.z != null) {
+      return new BABYLON.Vector3(location.x, location.y, location.z);
+    }
+    return null;
+  }
+
+  private canZoomOut(): boolean {
+    if (!this.camera) return false;
+    if (this.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
+      return this.orthoSize < this.defaultOrthoSize;
+    }
+    const upper = this.camera.upperRadiusLimit ?? 500;
+    return this.camera.radius < upper;
+  }
+
+  private updateZoomButtons(): void {
+    this.zoomOutEnabled = this.canZoomOut();
   }
 
   zoomIn(): void {
@@ -229,18 +311,24 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       const newRadius = this.camera.radius * 0.85;
       this.camera.radius = Math.max(newRadius, this.camera.lowerRadiusLimit ?? 1);
     }
+    this.updateZoomButtons();
   }
 
   zoomOut(): void {
     if (!this.camera) return;
 
+    if (!this.zoomOutEnabled) {
+      return;
+    }
+
     if (this.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
-      this.orthoSize = Math.min(18, this.orthoSize * 1.15);
+      this.orthoSize = Math.min(this.defaultOrthoSize, this.orthoSize * 1.15);
       this.updateOrthoCamera();
     } else {
       const newRadius = this.camera.radius * 1.15;
       this.camera.radius = Math.min(newRadius, this.camera.upperRadiusLimit ?? 500);
     }
+    this.updateZoomButtons();
   }
 
   get floorActionLabel(): string {
@@ -248,7 +336,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       return 'Ir al primer piso';
     }
     if (this.currentFloor === this.thirdFloorModel) {
-      return 'Ir al primer piso';
+      return 'Ir al segundo piso';
     }
     return 'Ir al segundo piso';
   }
@@ -316,7 +404,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.scene = new BABYLON.Scene(this.engine);
     this.scene.clearColor = new BABYLON.Color4(0.1, 0.1, 0.1, 1);
 
-    this.camera = new BABYLON.ArcRotateCamera('camera', -Math.PI / 4, Math.PI / 4, 12, BABYLON.Vector3.Zero(), this.scene);
+    this.camera = new BABYLON.ArcRotateCamera('camera', -Math.PI / 3, Math.PI / 5, 12, BABYLON.Vector3.Zero(), this.scene);
     this.camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
     this.camera.attachControl(canvas, true, false);
     this.camera.wheelDeltaPercentage = 0.01;
@@ -397,6 +485,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
     this.createGround();
     this.updateOrthoCamera();
+    this.updateZoomButtons();
     this.load3dModel(canvas);
 
     this.renderLoopFn = () => {
@@ -507,14 +596,6 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       console.log('==== NOMBRES DE CUERPOS ====');
       meshes.forEach((mesh) => console.log('CUERPO:', mesh.name));
 
-      // Dibujar un ejemplo de NavPath para pruebas usando datos reales + inventados
-      try {
-        const example = this.createExampleNavPathForEdificioAFirstFloor();
-        // start desde 'B' (pasillo central que conecta con Edificio B) y target 'Elevator'
-        this.drawFromNavPath(example, 'B', 'Elevator');
-      } catch (e) {
-        console.warn('No se pudo generar el NavPath de ejemplo:', e);
-      }
 
 
 
@@ -529,24 +610,16 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           const coords = pickResult.pickedPoint;
           console.log(`Clic en: ${target}, Coordenadas: (${coords?.x.toFixed(2)}, ${coords?.y.toFixed(2)}, ${coords?.z.toFixed(2)})`);
 
-          // ── Abrir diálogo de selección de piso si es uno de los cuerpos especificados ──
-          const shouldOpenFloorDialog = pickResult.pickedMesh && this.floorSelectionBodies.includes(pickResult.pickedMesh.name) &&
-            !(this.currentFloor === this.secondFloorModel &&
-              (pickResult.pickedMesh.name === 'Cuerpo14' || pickResult.pickedMesh.name === 'Cuerpo19'));
-
-          if (shouldOpenFloorDialog) {
+          // ── Abrir diálogo de selección de piso solo en el primer piso de Edificio A
+          const isFloorTrigger = pickResult.pickedMesh && this.currentFloor === this.firstFloorModel && this.floorSelectionBodies.includes(pickResult.pickedMesh.name);
+          if (isFloorTrigger) {
             this.openFloorDialog();
+          } else {
+            this.closeFloorDialog();
           }
 
-          const hideFloor2Tags = pickResult.pickedMesh?.name &&
-            this.currentFloor === this.secondFloorModel &&
-            (pickResult.pickedMesh.name === 'Cuerpo29' || pickResult.pickedMesh.name === 'Cuerpo13');
-
-          if (hideFloor2Tags) {
-            if (this.infoBox) {
-              this.infoBox.style.display = 'none';
-            }
-          } else if (pickResult.pickedMesh && this.infoBox) {
+          // ── Mostrar infoBox si hay info para el mesh clicado ──
+          if (pickResult.pickedMesh && this.infoBox) {
             const info = this.infoData[pickResult.pickedMesh.name];
             if (info) {
               this.infoBox.innerHTML = `
@@ -564,46 +637,12 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           }
 
           // --- DEMO: seleccionar punto A y punto B con dos clics para dibujar ruta ---
-          if (pickResult.pickedPoint && this.searchModeEnabled) {
-            this.handleMapClick(pickResult.pickedPoint);
-          }
         }
       });
 
     } catch (error) {
       console.error('No se pudo cargar el modelo 3D:', error);
     }
-  }
-
-  /** Construye un objeto navPath de ejemplo para el primer piso del Edificio A. */
-  private createExampleNavPathForEdificioAFirstFloor(): any {
-    // Coordenadas aproximadas (x, y, z) en el espacio de la escena — mezclamos puntos reales conocidos
-    // con puntos inventados para probar el sistema.
-    return {
-      building: 'Edificio A',
-      floor: 'first',
-      accesses: {
-        // Punto B: acceso al pasillo central hacia Edificio B
-        'B': [[-11.51, 0.01, -1.63]],
-        // Salidas a la izquierda/derecha del pasillo central
-        'C': [[-13.0, 0.01, -0.5]],
-        'D': [[-10.0, 0.01, -0.5]],
-        // Entrada principal al edificio A (conecta al mapa principal)
-        'MainEntrance': [[-5.0, 0.01, 2.0]]
-      },
-      // Puntos donde el pasillo principal dobla (se usan para trazar la guía)
-      turns: [
-        [-11.51, 0.01, -1.63], // inicio pasillo (B)
-        [-11.51, 0.01, -3.0],  // tramo hacia el final (frente al ascensor)
-        [-11.51, 0.01, -5.0]
-      ],
-      // Puntos de interés (salas, baños, ascensor, escaleras)
-      pois: {
-        'Elevator': [-11.51, 0.01, -5.5],
-        'BathroomWomen': [-10.5, 0.01, -2.8],
-        'Room101': [-12.2, 0.01, -1.2]
-      }
-    };
   }
 
   private createGround(): void {
@@ -616,8 +655,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     const ground = BABYLON.MeshBuilder.CreateGround('ground', { width: farSize, height: farSize }, this.scene);
     ground.position.y = 0.01;
     const groundMat = new BABYLON.StandardMaterial('groundMat', this.scene);
-    groundMat.diffuseColor = new BABYLON.Color3(0.18, 0.18, 0.18);
-    groundMat.specularColor = new BABYLON.Color3(0, 0, 0);
+    groundMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+    groundMat.specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
     ground.material = groundMat;
 
     const wallMat = new BABYLON.StandardMaterial('wallMat', this.scene);
@@ -650,71 +689,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     westWall.rotation = new BABYLON.Vector3(0, -Math.PI / 2, 0);
   }
 
-  // ── Gestión y dibujo de rutas / flechas ─────────────────
+  // ── Gestión de ruta y limpieza de trazados ─────────────────
   private pathMeshes: BABYLON.AbstractMesh[] = [];
-
-  /**
-   * Dibuja una ruta poligonal y flechas orientadas entre los puntos proporcionados.
-   * - `points` debe ser un array de `BABYLON.Vector3` en coordenadas del mundo de la escena.
-   */
-  public drawArrowPath(points: BABYLON.Vector3[], color = new BABYLON.Color3(0.05, 0.7, 0.15)): void {
-    if (!this.scene) return;
-    this.clearPath();
-
-    if (!points || points.length < 2) return;
-
-    // Línea que une los puntos
-    const lines = BABYLON.MeshBuilder.CreateLines('pathLines', { points }, this.scene);
-    // LinesMesh soporta propiedad `color`
-    (lines as any).color = color;
-    this.pathMeshes.push(lines);
-
-    // Material para las puntas de flecha
-    const arrowMat = new BABYLON.StandardMaterial('arrowMat', this.scene);
-    arrowMat.diffuseColor = color;
-    arrowMat.emissiveColor = color;
-
-    // Crear una flecha (cono) para cada segmento apuntando hacia el siguiente punto
-    for (let i = 0; i < points.length - 1; i++) {
-      try {
-        const a = points[i];
-        const b = points[i + 1];
-        const dir = b.subtract(a);
-        const length = dir.length();
-        if (length === 0) continue;
-
-        // Posicionar la flecha en la mitad del segmento
-        const mid = a.add(dir.scale(0.5));
-
-        // Crear un cono (arrow head)
-        const head = BABYLON.MeshBuilder.CreateCylinder(`arrowHead_${i}`, {
-          height: Math.min(1.2, Math.max(0.4, length * 0.25)),
-          diameterTop: 0,
-          diameterBottom: Math.min(0.6, Math.max(0.15, length * 0.08))
-        }, this.scene);
-        head.material = arrowMat;
-        head.position = mid;
-
-        // Orientar el cono hacia el siguiente punto
-        head.lookAt(b);
-        // Ajuste: los conos se crean apuntando en +Z, rotar 90° sobre X para apuntar correctamente
-        head.rotate(new BABYLON.Vector3(1, 0, 0), Math.PI / 2, BABYLON.Space.LOCAL);
-
-        // Hacer que el cono no participe en picking/colisiones
-        head.isPickable = false;
-        head.checkCollisions = false;
-
-        this.pathMeshes.push(head);
-      } catch (e) {
-        console.warn('Error creando flecha del segmento', e);
-      }
-    }
-  }
-
-  /** Dibuja una flecha simple entre dos puntos A y B. */
-  public drawArrowBetween(a: BABYLON.Vector3, b: BABYLON.Vector3): void {
-    this.drawArrowPath([a, b]);
-  }
 
   /** Limpia/descarta la ruta y las flechas dibujadas */
   public clearPath(): void {
@@ -726,183 +702,19 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   // --- Utilities para demo de selección y marcadores ---
-  private createMarker(pos: BABYLON.Vector3, color = new BABYLON.Color3(0.9, 0.2, 0.2)): BABYLON.Mesh | null {
-    if (!this.scene) return null;
-    const mat = new BABYLON.StandardMaterial('markerMat', this.scene);
-    mat.diffuseColor = color;
-    const sph = BABYLON.MeshBuilder.CreateSphere('marker', { diameter: 0.6 }, this.scene);
-    sph.material = mat;
-    sph.position = pos.clone();
-    sph.isPickable = false;
-    return sph;
-  }
-
   private clearMarkers(): void {
-    try { if (this.startMarker) { this.startMarker.dispose(); this.startMarker = null; } } catch {}
-    try { if (this.endMarker) { this.endMarker.dispose(); this.endMarker = null; } } catch {}
-  }
-
-  private sampleLine(a: BABYLON.Vector3, b: BABYLON.Vector3, step = 1): BABYLON.Vector3[] {
-    const dir = b.subtract(a);
-    const length = dir.length();
-    if (length === 0) return [a.clone()];
-    const n = Math.max(1, Math.floor(length / step));
-    const unit = dir.normalize();
-    const pts: BABYLON.Vector3[] = [];
-    for (let i = 0; i <= n; i++) {
-      const t = Math.min(i * step, length);
-      pts.push(a.add(unit.scale(t)));
-    }
-    // asegurar punto final exacto
-    if (!pts[pts.length - 1].equals(b)) pts.push(b.clone());
-    return pts;
-  }
-
-  // ── Nuevas utilidades para dibujar rutas a partir de documentos "navigation paths" ──
-  private coordToVec3(coord: number[] | undefined): BABYLON.Vector3 | null {
-    if (!coord || coord.length < 3) return null;
-    return new BABYLON.Vector3(coord[0], coord[1], coord[2]);
-  }
-
-  private distancePointToSegment(p: BABYLON.Vector3, a: BABYLON.Vector3, b: BABYLON.Vector3): number {
-    const ab = b.subtract(a);
-    const ap = p.subtract(a);
-    const abLen2 = ab.lengthSquared();
-    if (abLen2 === 0) return ap.length();
-    const t = Math.max(0, Math.min(1, BABYLON.Vector3.Dot(ap, ab) / abLen2));
-    const proj = a.add(ab.scale(t));
-    return p.subtract(proj).length();
-  }
-
-  /**
-   * Dibuja una ruta basada en la estructura de un documento "navPath".
-   * navPath: { building, floor, accesses: {name:[[x,y,z],...]}, turns:[[x,y,z],...], pois: {name:[x,y,z]} }
-   * startAccessName: clave dentro de accesses para punto de inicio (opcional)
-   * targetPoiName: clave dentro de pois que indica destino final (opcional)
-   */
-  public drawFromNavPath(navPath: any, startAccessName?: string, targetPoiName?: string): void {
-    if (!this.scene || !navPath) return;
-
-    const accesses = navPath.accesses || {};
-    const turns = Array.isArray(navPath.turns) ? navPath.turns : [];
-    const pois = navPath.pois || {};
-
-    // Convertir turns a Vector3
-    const turnVecs: BABYLON.Vector3[] = turns.map((c: number[]) => this.coordToVec3(c)).filter(Boolean) as BABYLON.Vector3[];
-
-    // Obtener coords de accesses: elegir la primera coordenada disponible por acceso
-    const accessEntries: { name: string; coord: BABYLON.Vector3 }[] = Object.keys(accesses).map(k => {
-      const arr = Array.isArray(accesses[k]) ? accesses[k] : [];
-      const coord = this.coordToVec3(arr[0]);
-      return { name: k, coord };
-    }).filter(x => x.coord) as { name: string; coord: BABYLON.Vector3 }[];
-
-    // Determinar punto de inicio
-    let startPoint: BABYLON.Vector3 | null = null;
-    if (startAccessName && accesses[startAccessName] && accesses[startAccessName].length > 0) {
-      startPoint = this.coordToVec3(accesses[startAccessName][0]);
-    } else if (accessEntries.length > 0) {
-      startPoint = accessEntries[0].coord.clone();
-    }
-
-    // Determinar target POI
-    let targetPoi: BABYLON.Vector3 | null = null;
-    if (targetPoiName && pois[targetPoiName]) {
-      targetPoi = this.coordToVec3(pois[targetPoiName]);
-    }
-
-    // Construir polyline: start -> turns -> nearest access to target (si existe) o el resto de accesses
-    const path: BABYLON.Vector3[] = [];
-    if (startPoint) path.push(startPoint.clone());
-    // agregar turns
-    for (const t of turnVecs) path.push(t.clone());
-
-    // Si hay targetPoi, elegir el access más cercano a targetPoi como posible final
-    if (targetPoi && accessEntries.length > 0) {
-      let best = accessEntries[0];
-      let bestDist = this.distancePointToSegment(targetPoi, accessEntries[0].coord, accessEntries[0].coord);
-      for (const a of accessEntries) {
-        const d = targetPoi.subtract(a.coord).length();
-        if (d < bestDist) { best = a; bestDist = d; }
-      }
-      path.push(best.coord.clone());
-    } else {
-      // si no hay target, agregar los demás accesses en orden
-      for (const a of accessEntries) {
-        // evitar duplicar el inicio
-        if (!startPoint || !a.coord.equals(startPoint)) path.push(a.coord.clone());
-      }
-    }
-
-    // Ahora recorrer segmentos y, si encontramos que el targetPoi está suficientemente cerca de algún segmento,
-    // desviar hacia ese POI y terminar la ruta allí.
-    if (targetPoi) {
-      const finalPath: BABYLON.Vector3[] = [];
-      for (let i = 0; i < path.length - 1; i++) {
-        const a = path[i];
-        const b = path[i + 1];
-        finalPath.push(a.clone());
-        const dist = this.distancePointToSegment(targetPoi, a, b);
-        const THRESH = 1.2; // umbral de intersección en unidades del mundo
-        if (dist <= THRESH) {
-          // insertar proyección aproximada como punto de giro hacia el POI
-          // calcular proyección t
-          const ab = b.subtract(a);
-          const ap = targetPoi.subtract(a);
-          const t = Math.max(0, Math.min(1, BABYLON.Vector3.Dot(ap, ab) / Math.max(ab.lengthSquared(), 1e-6)));
-          const proj = a.add(ab.scale(t));
-          finalPath.push(proj);
-          finalPath.push(targetPoi.clone());
-          // terminar ruta
-          this.drawArrowPath(finalPath);
-          return;
-        }
-      }
-      // si no se desvió hacia POI, añadir último punto y dibujar todo
-      finalPath.push(path[path.length - 1].clone());
-      this.drawArrowPath(finalPath);
-      return;
-    }
-
-    // Si no hay POI objetivo, dibujar la polyline tal cual
-    this.drawArrowPath(path);
-  }
-
-  private handleMapClick(point: BABYLON.Vector3): void {
-    // Si no hay inicio, establecerlo
-    if (!this.selectionStart) {
-      // limpiar trazados anteriores
-      this.clearPath();
-      this.clearMarkers();
-      this.selectionStart = point.clone();
-      this.startMarker = this.createMarker(this.selectionStart, new BABYLON.Color3(0.1, 0.6, 1));
-      console.log('Start seleccionada:', this.selectionStart);
-      return;
-    }
-
-    // Si ya había inicio, tomar como fin y dibujar ruta
-    const end = point.clone();
-    this.endMarker = this.createMarker(end, new BABYLON.Color3(0.9, 0.2, 0.2));
-
-    const pathPoints = this.sampleLine(this.selectionStart, end, 1);
-    this.drawArrowPath(pathPoints);
-
-    // reset selectionStart para la próxima demo
-    this.selectionStart = null;
-    console.log('Ruta dibujada entre puntos');
+    // Eliminado sistema de marcadores por selección de clic. Actualmente solo se limpian trazados.
   }
 
   private updateBuildingBMarkerPosition(canvas: HTMLCanvasElement): void {
     if (!this.buildingBMarker || !this.scene || !this.camera || !this.engine) return;
 
-    const isVisibleFloor = this.currentFloor === this.firstFloorModel || this.currentFloor === this.secondFloorModel;
-    if (!isVisibleFloor || this.viewMode !== '3d') {
+    // Solo mostrar el marcador si estamos en el piso 1 en vista 3D
+    const isFirstFloor = this.currentFloor === this.firstFloorModel;
+    if (!isFirstFloor || this.viewMode !== '3d') {
       this.buildingBMarker.style.display = 'none';
       return;
     }
-
-    const floorLabel = this.currentFloor === this.secondFloorModel ? '2' : '1';
-    this.buildingBMarker.innerHTML = `→ Ir al Edificio B - Piso ${floorLabel}`;
 
     // Centro calculado de los 4 puntos:
     // (-12.42, 0.01, -0.35), (-10.62, 0.01, -0.29), (-10.69, 0.01, -2.93), (-12.31, 0.01, -2.95)

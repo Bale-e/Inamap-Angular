@@ -45,13 +45,26 @@ export class Firebase {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
+  async getLocacionPorNombre(edificioId: string, piso: string, nombre: string) {
+    const locaciones = await this.getLocacionesPorPiso(edificioId, piso);
+    const normalized = nombre.trim().toLowerCase();
+    return locaciones.find((loc: any) => {
+      const nameValue = (loc.Nombre || loc.nombre || loc.name || '').toString().trim().toLowerCase();
+      return nameValue === normalized;
+    });
+  }
+
   async getNavigationPaths() {
     const snapshot = await getDocs(collection(db, 'navigation_paths'));
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    console.log('getNavigationPaths:', results);
+    return results;
   }
 
   async getRutas() {
     const snapshot = await getDocs(collection(db, 'rutas'));
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    console.log('getRutas:', results);
+    return results;
   }
 }

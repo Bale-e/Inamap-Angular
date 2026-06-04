@@ -5,7 +5,6 @@
     "module": "es2020",
     "moduleResolution": "bundler",
     "target": "es2022",
-    "ignoreDeprecations": "5.0",
     "skipLibCheck": true,
     "types": [
       "node",

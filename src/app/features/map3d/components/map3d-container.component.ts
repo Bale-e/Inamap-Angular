@@ -7,8 +7,8 @@ import { Component, AfterViewInit, OnDestroy, ElementRef, ViewChild } from '@ang
 import * as BABYLON from 'babylonjs';
 import 'babylonjs-loaders';
 import { HttpClient } from '@angular/common/http';
-import { Firebase } from '../../../../services/firebase';
-import { dibujarFlechaGuia } from '../../../app/services/flecha_guía';
+import { Firebase } from '../../../services/firebase';
+import { dibujarFlechaGuia } from '../../../services/flecha_guía';
 
 @Component({
   selector: 'app-map3d',

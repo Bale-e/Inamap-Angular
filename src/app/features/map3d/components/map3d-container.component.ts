@@ -79,20 +79,6 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.createInfoBox();
     this.createFloorArrow();
     this.createBuildingBMarker();
-    this.printFirebaseNavigationData();
-  }
-
-  private async printFirebaseNavigationData(): Promise<void> {
-    try {
-      const [navigationPaths, rutas] = await Promise.all([
-        this.firebaseService.getNavigationPaths(),
-        this.firebaseService.getRutas()
-      ]);
-      console.log('printFirebaseNavigationData - navigation_paths:', navigationPaths);
-      console.log('printFirebaseNavigationData - rutas:', rutas);
-    } catch (error) {
-      console.error('Error imprimiendo datos de Firebase:', error);
-    }
   }
 
   // ── Crea el cuadro de info flotante ──────────────────────

@@ -32,7 +32,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private cameraBeforeRenderObserver: BABYLON.Nullable<BABYLON.Observer<BABYLON.Scene>> = null;
   private renderLoopFn: (() => void) | null = null;
   private orthoSize = 8;
-  private readonly defaultOrthoSize = 9;
+  private readonly defaultOrthoSize = 6;
   private searchModeEnabled = false;
   private zoomOutEnabled = false;
   private bannerControlsAttached = false;
@@ -67,7 +67,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   };
 
   // ── Cuerpos del primer piso de Edificio A que abren el diálogo de selección de piso ────
-  private floorSelectionBodies = ['Cuerpo21', 'Cuerpo14', 'Cuerpo19', 'Cuerpo25'];
+  private floorSelectionBodies = ['Cuerpo21', 'Cuerpo14', 'Cuerpo19', 'Cuerpo25', 'Cuerpo11'];
 
   private readonly mainEntranceAccess = new BABYLON.Vector3(11.22, 0.01, 0.12);
 
@@ -79,20 +79,6 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.createInfoBox();
     this.createFloorArrow();
     this.createBuildingBMarker();
-    this.printFirebaseNavigationData();
-  }
-
-  private async printFirebaseNavigationData(): Promise<void> {
-    try {
-      const [navigationPaths, rutas] = await Promise.all([
-        this.firebaseService.getNavigationPaths(),
-        this.firebaseService.getRutas()
-      ]);
-      console.log('printFirebaseNavigationData - navigation_paths:', navigationPaths);
-      console.log('printFirebaseNavigationData - rutas:', rutas);
-    } catch (error) {
-      console.error('Error imprimiendo datos de Firebase:', error);
-    }
   }
 
   // ── Crea el cuadro de info flotante ──────────────────────
@@ -408,8 +394,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
     this.camera.attachControl(canvas, true, false);
     this.camera.wheelDeltaPercentage = 0.01;
-    this.camera.lowerRadiusLimit = 8;
-    this.camera.upperRadiusLimit = 20;
+    this.camera.lowerRadiusLimit = 6;
+    this.camera.upperRadiusLimit = 6;
     this.camera.panningSensibility = 50;
     this.camera.panningAxis = new BABYLON.Vector3(1, 0, 0);
     this.camera.lowerBetaLimit = 0.01;
@@ -419,8 +405,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     const fixedCameraY = 0;
     const maxPanX = 5;
     const minPanX = -5;
-    const orthoMin = 4; // tamaño ortho más cercano (zoom máximo)
-    const orthoMax = 18; // tamaño ortho más lejano (zoom mínimo)
+    const orthoMin = 6; // tamaño ortho más cercano (zoom máximo) - punto inicial
+    const orthoMax = 10; // tamaño ortho más lejano (zoom mínimo)
 
     if (this.scene) {
       this.cameraBeforeRenderObserver = this.scene.onBeforeRenderObservable.add(() => {
@@ -603,7 +589,23 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       canvas.addEventListener('click', (evt) => {
         if (!this.scene) return;
 
-        const pickResult = this.scene.pick(evt.clientX, evt.clientY);
+        // Usar multiPick para obtener todos los hits y filtrar solo meshes de cuerpos (no ground)
+        const hits = this.scene.multiPick(evt.clientX, evt.clientY);
+        let pickResult: any = null;
+
+        // Buscar el primer hit que NO sea el ground o suelo
+        if (hits && hits.length > 0) {
+          for (const hit of hits) {
+            if (hit.hit && hit.pickedMesh && hit.pickedMesh.name && !hit.pickedMesh.name.toLowerCase().includes('ground') && !hit.pickedMesh.name.toLowerCase().includes('wall')) {
+              pickResult = hit;
+              break;
+            }
+          }
+          // Si no encuentra cuerpo específico pero hay hits, usar el ground si existe
+          if (!pickResult && hits[0]?.hit) {
+            pickResult = hits[0];
+          }
+        }
 
         if (pickResult?.hit) {
           const target = pickResult.pickedMesh ? pickResult.pickedMesh.name : 'suelo';

@@ -4,8 +4,11 @@
 -->
 
 <div class="map-body">
-  <div class="view-2d" *ngIf="viewMode === '2d'">
-    <img src="/assets/2d-models/edificio-a.svg" alt="Edificio A 2D" class="plan-image" />
+  <div class="view-2d" *ngIf="viewMode === '2d'" role="button" tabindex="0" (click)="enterTopDownView()" (keyup.enter)="enterTopDownView()">
+    <div class="plan-placeholder">
+      <div class="plan-placeholder__title">Vista 2D</div>
+      <div class="plan-placeholder__subtitle">Haz click para abrir la vista cenital 3D</div>
+    </div>
   </div>
 
   <div class="view-3d" *ngIf="viewMode === '3d'">

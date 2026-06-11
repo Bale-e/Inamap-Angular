@@ -31,8 +31,11 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private camera: BABYLON.ArcRotateCamera | null = null;
   private cameraBeforeRenderObserver: BABYLON.Nullable<BABYLON.Observer<BABYLON.Scene>> = null;
   private renderLoopFn: (() => void) | null = null;
-  private orthoSize = 8;
-  private readonly defaultOrthoSize = 6;
+  private orthoSize = 14;
+  private readonly defaultOrthoSize = 14;
+  private readonly boundaryNameRegExp = /wall|ground|floor|suelo|piso/i;
+  private readonly topDownPanLimits = { minX: -14, maxX: 14, minZ: -14, maxZ: 14 };
+  private isTopDownView = false;
   private searchModeEnabled = false;
   private zoomOutEnabled = false;
   private bannerControlsAttached = false;
@@ -177,16 +180,24 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  setView(mode: '2d' | '3d'): void {
-    if (this.viewMode === mode) return;
+  setView(mode: '2d' | '3d', topDown = false): void {
+    if (this.viewMode === mode && !(mode === '3d' && topDown !== this.isTopDownView)) return;
     if (mode === '3d') {
       this.viewMode = '3d';
+      this.isTopDownView = topDown;
       setTimeout(() => this.init3dScene(), 0);
     } else {
       this.dispose3d();
       this.viewMode = '2d';
+      this.isTopDownView = false;
     }
     this.updateBannerButtons();
+  }
+
+  enterTopDownView(): void {
+    if (this.viewMode === '2d') {
+      this.setView('3d', true);
+    }
   }
 
   private attachBannerControls(): void {
@@ -390,23 +401,41 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.scene = new BABYLON.Scene(this.engine);
     this.scene.clearColor = new BABYLON.Color4(0.1, 0.1, 0.1, 1);
 
-    this.camera = new BABYLON.ArcRotateCamera('camera', -Math.PI / 3, Math.PI / 5, 12, BABYLON.Vector3.Zero(), this.scene);
+    const initialAlpha = this.isTopDownView ? -Math.PI / 2 : -Math.PI / 3;
+    const initialBeta = this.isTopDownView ? 0.12 : Math.PI / 5;
+    const initialRadius = this.isTopDownView ? 25 : 20;
+
+    this.camera = new BABYLON.ArcRotateCamera('camera', initialAlpha, initialBeta, initialRadius, BABYLON.Vector3.Zero(), this.scene);
     this.camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
     this.camera.attachControl(canvas, true, false);
     this.camera.wheelDeltaPercentage = 0.01;
-    this.camera.lowerRadiusLimit = 6;
-    this.camera.upperRadiusLimit = 6;
+    this.camera.lowerRadiusLimit = 12;
+    this.camera.upperRadiusLimit = 30;
     this.camera.panningSensibility = 50;
-    this.camera.panningAxis = new BABYLON.Vector3(1, 0, 0);
-    this.camera.lowerBetaLimit = 0.01;
-    this.camera.upperBetaLimit = Math.PI / 2;
+    this.camera.checkCollisions = true;
+    this.camera.collisionRadius = new BABYLON.Vector3(0.75, 0.75, 0.75);
+    this.camera.setTarget(BABYLON.Vector3.Zero());
+
+    if (this.isTopDownView) {
+      this.camera.panningAxis = new BABYLON.Vector3(1, 0, 1);
+      this.camera.lowerAlphaLimit = this.camera.upperAlphaLimit = this.camera.alpha;
+      this.camera.lowerBetaLimit = this.camera.upperBetaLimit = this.camera.beta;
+    } else {
+      this.camera.panningAxis = new BABYLON.Vector3(1, 0, 0);
+      this.camera.lowerBetaLimit = 0.01;
+      this.camera.upperBetaLimit = Math.PI / 2;
+    }
 
     // Permitir movimiento horizontal en X solo cuando se haya hecho zoom suficiente (>=30%)
     const fixedCameraY = 0;
     const maxPanX = 5;
     const minPanX = -5;
-    const orthoMin = 6; // tamaño ortho más cercano (zoom máximo) - punto inicial
-    const orthoMax = 10; // tamaño ortho más lejano (zoom mínimo)
+    const orthoMin = 6; // tamaño ortho más cercano (zoom máximo)
+    const orthoMax = 14; // tamaño ortho más lejano (zoom mínimo)
+    const topDownMinX = this.topDownPanLimits.minX;
+    const topDownMaxX = this.topDownPanLimits.maxX;
+    const topDownMinZ = this.topDownPanLimits.minZ;
+    const topDownMaxZ = this.topDownPanLimits.maxZ;
 
     if (this.scene) {
       this.cameraBeforeRenderObserver = this.scene.onBeforeRenderObservable.add(() => {
@@ -437,20 +466,37 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
             allowPan = zoomPercent >= 0.3;
           }
 
-          if (!allowPan) {
-            // si no está permitido paneo, centrar X en 0
-            if (newTarget.x !== 0) {
-              newTarget.x = 0;
+          if (this.isTopDownView) {
+            if (newTarget.x > topDownMaxX) {
+              newTarget.x = topDownMaxX;
+              modified = true;
+            } else if (newTarget.x < topDownMinX) {
+              newTarget.x = topDownMinX;
+              modified = true;
+            }
+            if (newTarget.z > topDownMaxZ) {
+              newTarget.z = topDownMaxZ;
+              modified = true;
+            } else if (newTarget.z < topDownMinZ) {
+              newTarget.z = topDownMinZ;
               modified = true;
             }
           } else {
-            // limitar paneo horizontal dentro de rangos
-            if (newTarget.x > maxPanX) {
-              newTarget.x = maxPanX;
-              modified = true;
-            } else if (newTarget.x < minPanX) {
-              newTarget.x = minPanX;
-              modified = true;
+            if (!allowPan) {
+              // si no está permitido paneo, centrar X en 0
+              if (newTarget.x !== 0) {
+                newTarget.x = 0;
+                modified = true;
+              }
+            } else {
+              // limitar paneo horizontal dentro de rangos
+              if (newTarget.x > maxPanX) {
+                newTarget.x = maxPanX;
+                modified = true;
+              } else if (newTarget.x < minPanX) {
+                newTarget.x = minPanX;
+                modified = true;
+              }
             }
           }
 
@@ -574,9 +620,21 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
         allNodes.position.x = -centerX;
         allNodes.position.y = -scaledBounds.min.y;
         allNodes.position.z = -centerZ;
+
+        if (this.camera) {
+          this.camera.setTarget(allNodes.position.clone());
+        }
       }
 
       this.scene.render();
+
+      // Asegurar colisiones entre cámara/texto y los cuerpos visibles
+      meshes.forEach((mesh) => {
+        if (mesh instanceof BABYLON.AbstractMesh) {
+          mesh.checkCollisions = true;
+          mesh.isPickable = true;
+        }
+      });
 
       // ── Nombres de los cuerpos en consola ─────────────────
       console.log('==== NOMBRES DE CUERPOS ====');
@@ -589,26 +647,17 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       canvas.addEventListener('click', (evt) => {
         if (!this.scene) return;
 
-        // Usar multiPick para obtener todos los hits y filtrar solo meshes de cuerpos (no ground)
         const hits = this.scene.multiPick(evt.clientX, evt.clientY);
         let pickResult: any = null;
 
-        // Buscar el primer hit que NO sea el ground o suelo
         if (hits && hits.length > 0) {
-          for (const hit of hits) {
-            if (hit.hit && hit.pickedMesh && hit.pickedMesh.name && !hit.pickedMesh.name.toLowerCase().includes('ground') && !hit.pickedMesh.name.toLowerCase().includes('wall')) {
-              pickResult = hit;
-              break;
-            }
-          }
-          // Si no encuentra cuerpo específico pero hay hits, usar el ground si existe
-          if (!pickResult && hits[0]?.hit) {
-            pickResult = hits[0];
-          }
+          pickResult = hits.find(hit => hit.hit && hit.pickedMesh && hit.pickedMesh.name);
         }
 
         if (pickResult?.hit) {
-          const target = pickResult.pickedMesh ? pickResult.pickedMesh.name : 'suelo';
+          const meshName = pickResult.pickedMesh ? pickResult.pickedMesh.name : 'suelo';
+          const isBoundary = this.boundaryNameRegExp.test(meshName);
+          const target = isBoundary ? `${meshName} (límite)` : meshName;
           const coords = pickResult.pickedPoint;
           console.log(`Clic en: ${target}, Coordenadas: (${coords?.x.toFixed(2)}, ${coords?.y.toFixed(2)}, ${coords?.z.toFixed(2)})`);
 
@@ -659,18 +708,23 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     const groundMat = new BABYLON.StandardMaterial('groundMat', this.scene);
     groundMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
     groundMat.specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+    groundMat.alpha = 0;
+    groundMat.backFaceCulling = false;
     ground.material = groundMat;
+    ground.checkCollisions = true;
+    ground.isPickable = true;
 
     const wallMat = new BABYLON.StandardMaterial('wallMat', this.scene);
     wallMat.diffuseColor = new BABYLON.Color3(0.12, 0.12, 0.12);
     wallMat.specularColor = new BABYLON.Color3(0, 0, 0);
-    wallMat.alpha = 0.95;
+    wallMat.alpha = 0;
     wallMat.backFaceCulling = false;
 
     const createWall = (name: string, width: number, height: number): BABYLON.Mesh => {
       const wall = BABYLON.MeshBuilder.CreatePlane(name, { width, height }, this.scene!);
       wall.material = wallMat;
-      wall.isPickable = false;
+      wall.checkCollisions = true;
+      wall.isPickable = true;
       return wall;
     };
 

@@ -20,7 +20,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   @ViewChild('renderCanvas', { static: false })
   renderCanvasContainer!: ElementRef<HTMLDivElement>;
 
-  viewMode: '2d' | '3d' = '2d';
+  viewMode: '2d' | '3d' = '3d';
   private readonly firstFloorModel = 'Edifico A - Piso 1.obj';
   private readonly secondFloorModel = 'Edificio A - piso 2.obj';
   private readonly thirdFloorModel = 'Edificio A - piso 3.obj';
@@ -82,6 +82,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.createInfoBox();
     this.createFloorArrow();
     this.createBuildingBMarker();
+    if (this.viewMode === '3d') {
+      setTimeout(() => this.init3dScene(), 0);
+    }
   }
 
   // ── Crea el cuadro de info flotante ──────────────────────
@@ -180,24 +183,53 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  setView(mode: '2d' | '3d', topDown = false): void {
-    if (this.viewMode === mode && !(mode === '3d' && topDown !== this.isTopDownView)) return;
+  setView(mode: '2d' | '3d'): void {
+    if (mode === this.viewMode) return;
+
     if (mode === '3d') {
       this.viewMode = '3d';
-      this.isTopDownView = topDown;
-      setTimeout(() => this.init3dScene(), 0);
-    } else {
-      this.dispose3d();
-      this.viewMode = '2d';
       this.isTopDownView = false;
+      if (!this.scene) {
+        setTimeout(() => this.init3dScene(), 0);
+      } else {
+        this.configureCameraMode();
+      }
+    } else {
+      this.viewMode = '2d';
+      this.isTopDownView = true;
+      if (!this.scene) {
+        setTimeout(() => this.init3dScene(), 0);
+      } else {
+        this.configureCameraMode();
+      }
     }
+
     this.updateBannerButtons();
   }
 
-  enterTopDownView(): void {
-    if (this.viewMode === '2d') {
-      this.setView('3d', true);
+  private configureCameraMode(): void {
+    if (!this.camera) return;
+
+    if (this.isTopDownView) {
+      this.camera.alpha = -Math.PI / 2;
+      this.camera.beta = 0.12;
+      this.camera.radius = 25;
+      this.camera.panningAxis = new BABYLON.Vector3(1, 0, 1);
+      this.camera.lowerAlphaLimit = this.camera.upperAlphaLimit = this.camera.alpha;
+      this.camera.lowerBetaLimit = this.camera.upperBetaLimit = this.camera.beta;
+    } else {
+      this.camera.alpha = -Math.PI / 3;
+      this.camera.beta = Math.PI / 5;
+      this.camera.radius = 20;
+      this.camera.panningAxis = new BABYLON.Vector3(1, 0, 0);
+      this.camera.lowerAlphaLimit = null;
+      this.camera.upperAlphaLimit = null;
+      this.camera.lowerBetaLimit = 0.01;
+      this.camera.upperBetaLimit = Math.PI / 2;
     }
+
+    this.camera.setTarget(BABYLON.Vector3.Zero());
+    this.updateOrthoCamera();
   }
 
   private attachBannerControls(): void {
@@ -219,7 +251,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (view2DBtn) view2DBtn.disabled = this.viewMode === '2d';
     if (view3DBtn) view3DBtn.disabled = this.viewMode === '3d';
     if (searchPlaceBtn) {
-      searchPlaceBtn.disabled = this.viewMode !== '3d';
+      searchPlaceBtn.disabled = false;
       searchPlaceBtn.textContent = 'Buscar lugar';
     }
     this.updateZoomButtons();
@@ -651,7 +683,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
         let pickResult: any = null;
 
         if (hits && hits.length > 0) {
-          pickResult = hits.find(hit => hit.hit && hit.pickedMesh && hit.pickedMesh.name);
+          const objectHit = hits.find(hit => hit.hit && hit.pickedMesh && hit.pickedMesh.name && !this.boundaryNameRegExp.test(hit.pickedMesh.name));
+          const fallbackHit = hits.find(hit => hit.hit && hit.pickedMesh && hit.pickedMesh.name);
+          pickResult = objectHit || fallbackHit;
         }
 
         if (pickResult?.hit) {

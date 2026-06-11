@@ -3,7 +3,7 @@
   Descripción: inicializa la escena BabylonJS, carga modelos OBJ, gestiona interacción (clics, zoom,
   búsqueda de rutas) y dibuja guías/flechas basadas en datos de navegación.
 */
-import { Component, AfterViewInit, OnDestroy, ElementRef, ViewChild } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ElementRef, ViewChild, NgZone, ChangeDetectorRef } from '@angular/core';
 import * as BABYLON from 'babylonjs';
 import 'babylonjs-loaders';
 import { HttpClient } from '@angular/common/http';
@@ -36,9 +36,12 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private readonly boundaryNameRegExp = /wall|ground|floor|suelo|piso/i;
   private readonly topDownPanLimits = { minX: -14, maxX: 14, minZ: -14, maxZ: 14 };
   private isTopDownView = false;
-  private searchModeEnabled = false;
-  private zoomOutEnabled = false;
+  searchModeEnabled = false;
+  zoomOutEnabled = false;
   private bannerControlsAttached = false;
+  public cuerpo23HintVisible = false;
+  public cuerpo23HintX = 0;
+  public cuerpo23HintY = 0;
   private infoBox: HTMLDivElement | null = null;
   private floorArrow: HTMLDivElement | null = null;
   private buildingBMarker: HTMLDivElement | null = null;
@@ -74,7 +77,12 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
   private readonly mainEntranceAccess = new BABYLON.Vector3(11.22, 0.01, 0.12);
 
-  constructor(private http: HttpClient, private firebaseService: Firebase) {}
+  constructor(
+    private http: HttpClient,
+    private firebaseService: Firebase,
+    private ngZone: NgZone,
+    private cd: ChangeDetectorRef
+  ) {}
 
   ngAfterViewInit(): void {
     this.ensureLoaders();
@@ -82,6 +90,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.createInfoBox();
     this.createFloorArrow();
     this.createBuildingBMarker();
+    this.loadLocationOptions().catch((error) => console.error('Error cargando locaciones:', error));
     if (this.viewMode === '3d') {
       setTimeout(() => this.init3dScene(), 0);
     }
@@ -213,14 +222,14 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (this.isTopDownView) {
       this.camera.alpha = -Math.PI / 2;
       this.camera.beta = 0.12;
-      this.camera.radius = 25;
+      this.camera.radius = 35;
       this.camera.panningAxis = new BABYLON.Vector3(1, 0, 1);
       this.camera.lowerAlphaLimit = this.camera.upperAlphaLimit = this.camera.alpha;
       this.camera.lowerBetaLimit = this.camera.upperBetaLimit = this.camera.beta;
     } else {
       this.camera.alpha = -Math.PI / 3;
       this.camera.beta = Math.PI / 5;
-      this.camera.radius = 20;
+      this.camera.radius = 30;
       this.camera.panningAxis = new BABYLON.Vector3(1, 0, 0);
       this.camera.lowerAlphaLimit = null;
       this.camera.upperAlphaLimit = null;
@@ -230,6 +239,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
     this.camera.setTarget(BABYLON.Vector3.Zero());
     this.updateOrthoCamera();
+    this.updateSceneAppearance();
   }
 
   private attachBannerControls(): void {
@@ -237,9 +247,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     const view2DBtn = document.getElementById('view2DBtn');
     const view3DBtn = document.getElementById('view3DBtn');
     const searchPlaceBtn = document.getElementById('searchPlaceBtn');
-    if (view2DBtn) view2DBtn.addEventListener('click', () => this.setView('2d'));
-    if (view3DBtn) view3DBtn.addEventListener('click', () => this.setView('3d'));
-    if (searchPlaceBtn) searchPlaceBtn.addEventListener('click', () => this.toggleSearchMode());
+    if (view2DBtn) view2DBtn.addEventListener('click', () => this.ngZone.run(() => this.setView('2d')));
+    if (view3DBtn) view3DBtn.addEventListener('click', () => this.ngZone.run(() => this.setView('3d')));
+    if (searchPlaceBtn) searchPlaceBtn.addEventListener('click', () => this.ngZone.run(() => this.toggleSearchMode()));
     this.bannerControlsAttached = true;
     this.updateBannerButtons();
   }
@@ -288,7 +298,13 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private async searchDestination(destination: string): Promise<void> {
-    const location = await this.firebaseService.getLocacionPorNombre('Edificio A', '1', destination);
+    const locations = await this.firebaseService.getLocaciones('Edificio A');
+    const normalizedSearch = destination.trim().toLowerCase();
+    const location = locations.find((loc: any) => {
+      const nameValue = (loc.Nombre || loc.nombre || loc.name || '').toString().trim().toLowerCase();
+      return nameValue === normalizedSearch;
+    });
+
     const coordinate = this.extractCoordinateFromLocation(location);
     this.clearPath();
     this.clearMarkers();
@@ -315,6 +331,37 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       return new BABYLON.Vector3(location.x, location.y, location.z);
     }
     return null;
+  }
+
+  private async loadLocationOptions(): Promise<void> {
+    try {
+      const locations = await this.firebaseService.getLocaciones('Edificio A');
+      const options = locations
+        .map((loc: any) => {
+          const name = (loc.Nombre || loc.nombre || loc.name || loc.DisplayName || loc.displayName || loc.id || '').toString().trim();
+          return name || loc.id || '';
+        })
+        .filter((name: string) => name.length > 0);
+
+      if (options.length > 0) {
+        this.destinationOptions = Array.from(new Set(options));
+        this.filteredDestinations = [...this.destinationOptions];
+        this.cd.detectChanges();
+      }
+    } catch (error) {
+      console.error('No se pudieron cargar las locaciones desde Firebase:', error);
+    }
+  }
+
+  private updateSceneAppearance(): void {
+    if (!this.scene) return;
+    if (this.isTopDownView) {
+      this.scene.clearColor = new BABYLON.Color4(0.05, 0.05, 0.08, 1);
+      this.scene.environmentIntensity = 0.25;
+    } else {
+      this.scene.clearColor = new BABYLON.Color4(0.1, 0.1, 0.1, 1);
+      this.scene.environmentIntensity = 0.15;
+    }
   }
 
   private canZoomOut(): boolean {
@@ -435,14 +482,14 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
     const initialAlpha = this.isTopDownView ? -Math.PI / 2 : -Math.PI / 3;
     const initialBeta = this.isTopDownView ? 0.12 : Math.PI / 5;
-    const initialRadius = this.isTopDownView ? 25 : 20;
+    const initialRadius = this.isTopDownView ? 30 : 28;
 
     this.camera = new BABYLON.ArcRotateCamera('camera', initialAlpha, initialBeta, initialRadius, BABYLON.Vector3.Zero(), this.scene);
     this.camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
     this.camera.attachControl(canvas, true, false);
     this.camera.wheelDeltaPercentage = 0.01;
     this.camera.lowerRadiusLimit = 12;
-    this.camera.upperRadiusLimit = 30;
+    this.camera.upperRadiusLimit = 50;
     this.camera.panningSensibility = 50;
     this.camera.checkCollisions = true;
     this.camera.collisionRadius = new BABYLON.Vector3(0.75, 0.75, 0.75);
@@ -542,10 +589,18 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     }
 
     const light = new BABYLON.HemisphericLight('light', new BABYLON.Vector3(0, 1, 0), this.scene);
-    light.intensity = 1.2;
+    light.intensity = 0.8;
+    light.diffuse = new BABYLON.Color3(0.85, 0.85, 0.85);
+    light.groundColor = new BABYLON.Color3(0.12, 0.12, 0.15);
 
-    const directionalLight = new BABYLON.PointLight('pointLight', new BABYLON.Vector3(5, 10, 5), this.scene);
-    directionalLight.intensity = 0.8;
+    const directionalLight = new BABYLON.DirectionalLight('dirLight', new BABYLON.Vector3(-0.5, -1, -0.5), this.scene);
+    directionalLight.position = new BABYLON.Vector3(5, 10, 5);
+    directionalLight.intensity = 1.7;
+    directionalLight.diffuse = new BABYLON.Color3(1, 1, 1);
+    directionalLight.specular = new BABYLON.Color3(0.2, 0.2, 0.2);
+    directionalLight.shadowEnabled = true;
+
+    this.scene.ambientColor = new BABYLON.Color3(0.05, 0.05, 0.06);
 
     this.createGround();
     this.updateOrthoCamera();
@@ -665,6 +720,11 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
         if (mesh instanceof BABYLON.AbstractMesh) {
           mesh.checkCollisions = true;
           mesh.isPickable = true;
+          if (mesh.material instanceof BABYLON.StandardMaterial) {
+            mesh.material.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+            mesh.material.ambientColor = new BABYLON.Color3(0.15, 0.15, 0.15);
+            mesh.material.emissiveColor = new BABYLON.Color3(0, 0, 0);
+          }
         }
       });
 
@@ -679,17 +739,21 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       canvas.addEventListener('click', (evt) => {
         if (!this.scene) return;
 
-        const hits = this.scene.multiPick(evt.clientX, evt.clientY);
+        const rect = canvas.getBoundingClientRect();
+        const pickX = evt.clientX - rect.left;
+        const pickY = evt.clientY - rect.top;
+
+        const hits = this.scene.multiPick(pickX, pickY);
         let pickResult: any = null;
 
         if (hits && hits.length > 0) {
-          const objectHit = hits.find(hit => hit.hit && hit.pickedMesh && hit.pickedMesh.name && !this.boundaryNameRegExp.test(hit.pickedMesh.name));
-          const fallbackHit = hits.find(hit => hit.hit && hit.pickedMesh && hit.pickedMesh.name);
+          const objectHit = hits.find(hit => hit.hit && hit.pickedMesh && !this.boundaryNameRegExp.test(hit.pickedMesh.name || ''));
+          const fallbackHit = hits.find(hit => hit.hit && hit.pickedMesh);
           pickResult = objectHit || fallbackHit;
         }
 
         if (pickResult?.hit) {
-          const meshName = pickResult.pickedMesh ? pickResult.pickedMesh.name : 'suelo';
+          const meshName = pickResult.pickedMesh ? pickResult.pickedMesh.name || 'cuerpo' : 'suelo';
           const isBoundary = this.boundaryNameRegExp.test(meshName);
           const target = isBoundary ? `${meshName} (límite)` : meshName;
           const coords = pickResult.pickedPoint;

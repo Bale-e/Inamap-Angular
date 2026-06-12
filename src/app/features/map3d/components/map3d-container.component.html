@@ -4,11 +4,7 @@
 -->
 
 <div class="map-body">
-  <div class="view-2d" *ngIf="viewMode === '2d'">
-    <img src="/assets/2d-models/edificio-a.svg" alt="Edificio A 2D" class="plan-image" />
-  </div>
-
-  <div class="view-3d" *ngIf="viewMode === '3d'">
+  <div class="view-3d">
     <div #renderCanvas class="render-canvas"></div>
 
     <div class="floor-action">

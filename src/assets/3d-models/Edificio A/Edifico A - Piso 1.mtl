@@ -3,3 +3,6 @@
 newmtl Acero_-_Satinado
 Kd 0.952941 0.427451 0.270588
 
+newmtl Acero_-_Satinado_1
+Kd 1.000000 1.000000 1.000000
+

@@ -32,6 +32,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private cameraBeforeRenderObserver: BABYLON.Nullable<BABYLON.Observer<BABYLON.Scene>> = null;
   private renderLoopFn: (() => void) | null = null;
   private orthoSize = 14;
+  private modelRoot: BABYLON.TransformNode | null = null;
   private readonly defaultOrthoSize = 14;
   private readonly boundaryNameRegExp = /wall|ground|floor|suelo|piso/i;
   private readonly topDownPanLimits = { minX: -14, maxX: 14, minZ: -14, maxZ: 14 };
@@ -219,6 +220,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private configureCameraMode(): void {
     if (!this.camera) return;
 
+    // Resetear zoom al cambiar de vista
+    this.orthoSize = this.defaultOrthoSize;
+
     if (this.isTopDownView) {
       this.camera.alpha = -Math.PI / 2;
       this.camera.beta = 0.12;
@@ -233,11 +237,13 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       this.camera.panningAxis = new BABYLON.Vector3(1, 0, 0);
       this.camera.lowerAlphaLimit = null;
       this.camera.upperAlphaLimit = null;
-      this.camera.lowerBetaLimit = 0.01;
-      this.camera.upperBetaLimit = Math.PI / 2;
+      this.camera.lowerBetaLimit = 0.05;
+      this.camera.upperBetaLimit = Math.PI / 2 - 0.05;
     }
 
-    this.camera.setTarget(BABYLON.Vector3.Zero());
+    // Apuntar a la posición del modelo, o al origen si no existe aún
+    const targetPos = this.modelRoot?.position?.clone() || BABYLON.Vector3.Zero();
+    this.camera.setTarget(targetPos);
     this.updateOrthoCamera();
     this.updateSceneAppearance();
   }
@@ -478,18 +484,23 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
     this.engine = new BABYLON.Engine(canvas, true);
     this.scene = new BABYLON.Scene(this.engine);
-    this.scene.clearColor = new BABYLON.Color4(0.1, 0.1, 0.1, 1);
+    this.scene.clearColor = new BABYLON.Color4(0.08, 0.08, 0.1, 1);
+
+    // Resetear orthoSize al inicializar escena
+    this.orthoSize = this.defaultOrthoSize;
 
     const initialAlpha = this.isTopDownView ? -Math.PI / 2 : -Math.PI / 3;
     const initialBeta = this.isTopDownView ? 0.12 : Math.PI / 5;
-    const initialRadius = this.isTopDownView ? 30 : 28;
+    // iniciar un 30% más cerca para una vista inicial más próxima
+    const initialRadius = (this.isTopDownView ? 30 : 28) * 0.7;
 
     this.camera = new BABYLON.ArcRotateCamera('camera', initialAlpha, initialBeta, initialRadius, BABYLON.Vector3.Zero(), this.scene);
     this.camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
     this.camera.attachControl(canvas, true, false);
     this.camera.wheelDeltaPercentage = 0.01;
-    this.camera.lowerRadiusLimit = 12;
-    this.camera.upperRadiusLimit = 50;
+    // permitir acercarse más (valor mínimo reducido) para respetar el zoom inicial
+    this.camera.lowerRadiusLimit = 2;
+    this.camera.upperRadiusLimit = 150;
     this.camera.panningSensibility = 50;
     this.camera.checkCollisions = true;
     this.camera.collisionRadius = new BABYLON.Vector3(0.75, 0.75, 0.75);
@@ -501,16 +512,17 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       this.camera.lowerBetaLimit = this.camera.upperBetaLimit = this.camera.beta;
     } else {
       this.camera.panningAxis = new BABYLON.Vector3(1, 0, 0);
-      this.camera.lowerBetaLimit = 0.01;
-      this.camera.upperBetaLimit = Math.PI / 2;
+      // límites más estrictos para evitar que la cámara mire por debajo del suelo
+      this.camera.lowerBetaLimit = 0.05;
+      this.camera.upperBetaLimit = Math.PI / 2 - 0.05;
     }
 
     // Permitir movimiento horizontal en X solo cuando se haya hecho zoom suficiente (>=30%)
     const fixedCameraY = 0;
     const maxPanX = 5;
     const minPanX = -5;
-    const orthoMin = 6; // tamaño ortho más cercano (zoom máximo)
-    const orthoMax = 14; // tamaño ortho más lejano (zoom mínimo)
+    const orthoMin = 2; // tamaño ortho más cercano (zoom máximo)
+    const orthoMax = 60; // tamaño ortho más lejano (zoom mínimo)
     const topDownMinX = this.topDownPanLimits.minX;
     const topDownMaxX = this.topDownPanLimits.maxX;
     const topDownMinZ = this.topDownPanLimits.minZ;
@@ -582,6 +594,38 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           if (modified) {
             camera.setTarget(newTarget);
           }
+
+          // Evitar que la cámara cruce por debajo del eje de suelo al rotar.
+          // Calculamos la altura Y de la cámara a partir del target, radius y beta
+          try {
+            const minCameraY = 1.5; // distancia mínima segura sobre el suelo (ajustada)
+            const camTarget = camera.target;
+            const camRadius = camera.radius || 1;
+            const camBeta = camera.beta || 0.001;
+            const camY = camTarget.y + camRadius * Math.cos(camBeta);
+
+            if (camY < minCameraY) {
+              // calcular beta máximo que mantiene camY >= minCameraY
+              const ratio = (minCameraY - camTarget.y) / Math.max(0.0001, camRadius);
+              const clampedRatio = Math.min(1, Math.max(-1, ratio));
+              const allowedBeta = Math.acos(clampedRatio);
+              // dejar un pequeño margen para evitar oscilaciones
+              const safeAllowedBeta = Math.max(0.05, allowedBeta - 0.03);
+              // limitar beta para que la cámara no mire tan bajo
+              camera.upperBetaLimit = Math.min(camera.upperBetaLimit ?? Math.PI / 2 - 0.001, safeAllowedBeta);
+              const lowerB = camera.lowerBetaLimit ?? 0.01;
+              camera.beta = Math.min(Math.max(camera.beta, lowerB), camera.upperBetaLimit);
+
+              // si tras limitar beta la cámara aún queda por debajo, ajustar radius como último recurso
+              const camYAfter = camTarget.y + (camera.radius || camRadius) * Math.cos(camera.beta || camBeta);
+              if (camYAfter < minCameraY) {
+                const neededRadius = Math.abs((minCameraY - camTarget.y) / Math.max(0.0001, Math.cos(camera.beta || camBeta)));
+                camera.radius = Math.max(camera.radius || camRadius, neededRadius, this.camera?.lowerRadiusLimit ?? 1);
+              }
+            }
+          } catch (err) {
+            // ignore
+          }
         } catch (e) {
           // ignore
         }
@@ -589,18 +633,22 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     }
 
     const light = new BABYLON.HemisphericLight('light', new BABYLON.Vector3(0, 1, 0), this.scene);
-    light.intensity = 0.8;
-    light.diffuse = new BABYLON.Color3(0.85, 0.85, 0.85);
-    light.groundColor = new BABYLON.Color3(0.12, 0.12, 0.15);
+    light.intensity = 0.45;
+    light.diffuse = new BABYLON.Color3(0.65, 0.65, 0.7);
+    light.groundColor = new BABYLON.Color3(0.06, 0.06, 0.07);
 
     const directionalLight = new BABYLON.DirectionalLight('dirLight', new BABYLON.Vector3(-0.5, -1, -0.5), this.scene);
-    directionalLight.position = new BABYLON.Vector3(5, 10, 5);
-    directionalLight.intensity = 1.7;
-    directionalLight.diffuse = new BABYLON.Color3(1, 1, 1);
-    directionalLight.specular = new BABYLON.Color3(0.2, 0.2, 0.2);
-    directionalLight.shadowEnabled = true;
+    directionalLight.position = new BABYLON.Vector3(8, 10, 8);
+    directionalLight.intensity = 0.8;
+    directionalLight.diffuse = new BABYLON.Color3(0.85, 0.85, 0.85);
+    directionalLight.specular = new BABYLON.Color3(0.03, 0.03, 0.03);
+    directionalLight.shadowEnabled = false;
 
-    this.scene.ambientColor = new BABYLON.Color3(0.05, 0.05, 0.06);
+    this.scene.ambientColor = new BABYLON.Color3(0.01, 0.01, 0.01);
+    this.scene.environmentIntensity = 0.04;
+    this.scene.imageProcessingConfiguration.contrast = 1.3;
+    this.scene.imageProcessingConfiguration.exposure = 0.55;
+    this.scene.imageProcessingConfiguration.toneMappingEnabled = false;
 
     this.createGround();
     this.updateOrthoCamera();
@@ -609,6 +657,15 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
     this.renderLoopFn = () => {
       if (this.scene && this.camera) {
+        // Mantener la cámara siempre centrada en el modelo mientras rote
+        try {
+          if (this.modelRoot) {
+            this.camera.setTarget(this.modelRoot.position.clone());
+          }
+        } catch (e) {
+          // ignore
+        }
+
         this.scene.render();
         this.updateBuildingBMarkerPosition(canvas);
       }
@@ -677,6 +734,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       if (meshes.length === 0) return;
 
       const allNodes = new BABYLON.TransformNode('modelRoot', this.scene);
+      // guardar referencia para centrar la cámara mientras el modelo rote
+      this.modelRoot = allNodes;
       // Rotar el objeto 180° en Y al cargar (mantener rotación X para orientación)
       allNodes.rotation = new BABYLON.Vector3(-Math.PI / 2, Math.PI, 0);
 
@@ -710,6 +769,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
         if (this.camera) {
           this.camera.setTarget(allNodes.position.clone());
+          // Actualizar la vista ortográfica después de posicionar el modelo
+          this.updateOrthoCamera();
         }
       }
 
@@ -720,10 +781,25 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
         if (mesh instanceof BABYLON.AbstractMesh) {
           mesh.checkCollisions = true;
           mesh.isPickable = true;
-          if (mesh.material instanceof BABYLON.StandardMaterial) {
-            mesh.material.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
-            mesh.material.ambientColor = new BABYLON.Color3(0.15, 0.15, 0.15);
-            mesh.material.emissiveColor = new BABYLON.Color3(0, 0, 0);
+
+          const material: any = mesh.material;
+          if (material) {
+            material.emissiveColor = new BABYLON.Color3(0, 0, 0);
+            if ('specularColor' in material) {
+              material.specularColor = new BABYLON.Color3(0.03, 0.03, 0.03);
+            }
+            if ('ambientColor' in material) {
+              material.ambientColor = new BABYLON.Color3(0.04, 0.04, 0.04);
+            }
+            if ('metallic' in material) {
+              material.metallic = 0;
+            }
+            if ('roughness' in material) {
+              material.roughness = Math.min(1, Math.max(material.roughness ?? 1, 0.85));
+            }
+            if ('specularPower' in material) {
+              material.specularPower = 8;
+            }
           }
         }
       });
@@ -804,10 +880,11 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     const ground = BABYLON.MeshBuilder.CreateGround('ground', { width: farSize, height: farSize }, this.scene);
     ground.position.y = 0.01;
     const groundMat = new BABYLON.StandardMaterial('groundMat', this.scene);
-    groundMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
-    groundMat.specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
-    groundMat.alpha = 0;
-    groundMat.backFaceCulling = false;
+    groundMat.diffuseColor = new BABYLON.Color3(0.38, 0.38, 0.38);
+    groundMat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
+    groundMat.emissiveColor = new BABYLON.Color3(0.02, 0.02, 0.02);
+    groundMat.alpha = 1;
+    groundMat.backFaceCulling = true;
     ground.material = groundMat;
     ground.checkCollisions = true;
     ground.isPickable = true;

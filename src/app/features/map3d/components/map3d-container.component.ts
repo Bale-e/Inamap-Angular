@@ -9,6 +9,9 @@ import 'babylonjs-loaders';
 import { HttpClient } from '@angular/common/http';
 import { Firebase } from '../../../services/firebase';
 import { dibujarFlechaGuia } from '../../../services/flecha_guía';
+import * as THREE from 'three';
+import {NavigationService, NavNode} from '../../../services/navigation.services';
+
 
 @Component({
   selector: 'app-map3d',
@@ -79,7 +82,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private readonly mainEntranceAccess = new BABYLON.Vector3(11.22, 0.01, 0.12);
 
   constructor(
-    private http: HttpClient,
+    private navigationService: NavigationService,
     private firebaseService: Firebase,
     private ngZone: NgZone,
     private cd: ChangeDetectorRef

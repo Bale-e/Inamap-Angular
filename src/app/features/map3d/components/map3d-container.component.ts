@@ -305,6 +305,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
   private async searchDestination(destination: string): Promise<void> {
     const locations = await this.firebaseService.getLocaciones('Edificio A');
+    console.log('searchDestination - locaciones recibidas:', { destination, locations });
     const normalizedSearch = destination.trim().toLowerCase();
     const location = locations.find((loc: any) => {
       const nameValue = (loc.Nombre || loc.nombre || loc.name || '').toString().trim().toLowerCase();
@@ -342,6 +343,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private async loadLocationOptions(): Promise<void> {
     try {
       const locations = await this.firebaseService.getLocaciones('Edificio A');
+      console.log('loadLocationOptions - locaciones recibidas:', locations);
       const options = locations
         .map((loc: any) => {
           const name = (loc.Nombre || loc.nombre || loc.name || loc.DisplayName || loc.displayName || loc.id || '').toString().trim();

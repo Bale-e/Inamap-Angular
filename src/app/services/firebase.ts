@@ -17,6 +17,7 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+console.log('Firebase inicializado:', app.name);
 const db  = getFirestore(app);
 
 @Injectable({
@@ -26,14 +27,18 @@ export class Firebase {
 
   async getEdificios() {
     const snapshot = await getDocs(collection(db, 'Edificios'));
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    console.log('Firebase getEdificios:', { count: results.length, results });
+    return results;
   }
 
   async getLocaciones(edificioId: string) {
     const snapshot = await getDocs(
       collection(db, `Edificios/${edificioId}/Locaciones`)
     );
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    console.log(`Firebase getLocaciones ${edificioId}:`, { count: results.length, results });
+    return results;
   }
 
   async getLocacionesPorPiso(edificioId: string, piso: string) {
@@ -42,7 +47,9 @@ export class Firebase {
       where('Piso', '==', piso)
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    console.log(`Firebase getLocacionesPorPiso ${edificioId} / ${piso}:`, { count: results.length, results });
+    return results;
   }
 
   async getLocacionPorNombre(edificioId: string, piso: string, nombre: string) {

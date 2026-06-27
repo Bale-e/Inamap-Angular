@@ -62,12 +62,19 @@ export class Firebase {
   }
 
   async getNavigationPaths() {
-    const snapshot = await getDocs(collection(db, 'navigation_paths'));
+    const snapshot = await getDocs(collection(db, 'navigation-paths'));
     const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     console.log('getNavigationPaths:', results);
     return results;
   }
 
+async getNavigationPath(piso: string) {
+  const q = query(collection(db, 'navigation-paths'), where('Piso', '==', piso));
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+  return snapshot.docs[0].data();
+}
+  
   async getRutas() {
     const snapshot = await getDocs(collection(db, 'rutas'));
     const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));

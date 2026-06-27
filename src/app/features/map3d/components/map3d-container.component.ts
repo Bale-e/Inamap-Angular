@@ -9,7 +9,7 @@ import 'babylonjs-loaders';
 import { HttpClient } from '@angular/common/http';
 import { Firebase } from '../../../services/firebase';
 import { dibujarFlechaGuia } from '../../../services/flecha_guía';
-import * as THREE from 'three';
+
 
 
 @Component({
@@ -464,26 +464,25 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private async searchDestination(destination: string): Promise<void> {
-    const locations = await this.firebaseService.getLocaciones('Edificio A');
-    console.log('searchDestination - locaciones recibidas:', { destination, locations });
-    const normalizedSearch = destination.trim().toLowerCase();
-    const location = locations.find((loc: any) => {
-      const nameValue = (loc.Nombre || loc.nombre || loc.name || '').toString().trim().toLowerCase();
-      return nameValue === normalizedSearch;
-    });
+  const locations = await this.firebaseService.getLocaciones("m0riTcScQk6A4SlXTy1E");
+  const normalizedSearch = destination.trim().toLowerCase();
+  const location = locations.find((loc: any) => {
+    const nameValue = (loc.Nombre || loc.nombre || loc.name || '').toString().trim().toLowerCase();
+    return nameValue === normalizedSearch;
+  });
 
-    const coordinate = this.extractCoordinateFromLocation(location);
-    this.clearPath();
-    this.clearMarkers();
-    if (coordinate) {
-      if (this.scene) {
-        this.pathMeshes.push(...dibujarFlechaGuia(this.scene, this.mainEntranceAccess, coordinate));
-      }
-      return;
-    }
+  const coordinate = this.extractCoordinateFromLocation(location);
+  this.clearPath();
+  this.clearMarkers();
 
-    console.warn(`No se encontró coordenada para destino: ${destination}`);
+  if (coordinate) {
+    const ruta = await this.buildRoute(coordinate);
+    this.drawRoute(ruta);
+    return;
   }
+
+  console.warn(`No se encontró coordenada para destino: ${destination}`);
+}
 
   private extractCoordinateFromLocation(location: any): BABYLON.Vector3 | null {
     if (!location) return null;
@@ -502,7 +501,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
   private async loadLocationOptions(): Promise<void> {
     try {
-      const locations = await this.firebaseService.getLocaciones('Edificio A');
+      const locations = await this.firebaseService.getLocaciones("m0riTcScQk6A4SlXTy1E");
       console.log('loadLocationOptions - locaciones recibidas:', locations);
       const options = locations
         .map((loc: any) => {
@@ -1152,4 +1151,46 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       card.style.display = card.style.display === 'none' ? 'block' : 'none';
     }
   }
+
+  private async buildRoute(destino: { x: number, y: number, z: number }): Promise<{ x: number, y: number, z: number }[]> {
+    const navPath = await this.firebaseService.getNavigationPath('Piso 1');
+
+    const puntos: { x: number, y: number, z: number }[] = [this.mainEntranceAccess];
+
+    if (navPath?.['Giros']?.length) {
+      let giroMasCercano = navPath['Giros'][0];
+      let menorDistancia = this.distancia(giroMasCercano['Coordenadas 3D'], destino);
+
+      navPath['Giros'].forEach((giro: any) => {
+        const d = this.distancia(giro['Coordenadas 3D'], destino);
+        if (d < menorDistancia) {
+          menorDistancia = d;
+          giroMasCercano = giro;
+        }
+      });
+
+      puntos.push(giroMasCercano['Coordenadas 3D']);
+    }
+
+    puntos.push(destino);
+    return puntos;
+  }
+
+  private distancia(a: { x: number, y: number, z: number }, b: { x: number, y: number, z: number }): number {
+    return Math.sqrt(
+      Math.pow(a.x - b.x, 2) +
+      Math.pow(a.y - b.y, 2) +
+      Math.pow(a.z - b.z, 2)
+    );
+  }
+
+  private drawRoute(puntos: { x: number, y: number, z: number }[]): void {
+  if (!this.scene) return;
+  for (let i = 0; i < puntos.length - 1; i++) {
+    const from = new BABYLON.Vector3(puntos[i].x, puntos[i].y, puntos[i].z);
+    const to   = new BABYLON.Vector3(puntos[i + 1].x, puntos[i + 1].y, puntos[i + 1].z);
+    this.pathMeshes.push(...dibujarFlechaGuia(this.scene, from, to));
+  }
 }
+
+}  

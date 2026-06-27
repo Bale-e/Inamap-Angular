@@ -10,7 +10,6 @@ import { HttpClient } from '@angular/common/http';
 import { Firebase } from '../../../services/firebase';
 import { dibujarFlechaGuia } from '../../../services/flecha_guía';
 import * as THREE from 'three';
-import {NavigationService, NavNode} from '../../../services/navigation.services';
 
 
 @Component({
@@ -49,6 +48,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private infoBox: HTMLDivElement | null = null;
   private floorArrow: HTMLDivElement | null = null;
   private buildingBMarker: HTMLDivElement | null = null;
+  private drawerOverlay: HTMLDivElement | null = null;
+  private sideDrawer: HTMLDivElement | null = null;
+  private drawerOpen = false;
+  private servicesList: string[] = ['Cafetería', 'Biblioteca', 'Recepción', 'Baños', 'Sala de Profesores', 'Soporte Técnico', 'Tienda'];
   floorDialogVisible = false;
   searchQuery = '';
   destinationOptions: string[] = ['Fotocopiadora', 'Sala de Tutorías 1', 'Sala de Tutorías 2', 'Sala de Tutorías 3', 'Sala de Tutorías 4', 'Ascensor'];
@@ -82,7 +85,6 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private readonly mainEntranceAccess = new BABYLON.Vector3(11.22, 0.01, 0.12);
 
   constructor(
-    private navigationService: NavigationService,
     private firebaseService: Firebase,
     private ngZone: NgZone,
     private cd: ChangeDetectorRef
@@ -94,6 +96,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.createInfoBox();
     this.createFloorArrow();
     this.createBuildingBMarker();
+    this.createDrawerElements();
+    this.attachDrawerControls();
     this.loadLocationOptions().catch((error) => console.error('Error cargando locaciones:', error));
     if (this.viewMode === '3d') {
       setTimeout(() => this.init3dScene(), 0);
@@ -170,6 +174,159 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       console.log('Navegando a Edificio B - Piso 1');
     });
     document.body.appendChild(this.buildingBMarker);
+  }
+
+  // ── Crea elementos del drawer (overlay + panel lateral) ─────────────────
+  private createDrawerElements(): void {
+    // Overlay
+    this.drawerOverlay = document.createElement('div');
+    this.drawerOverlay.className = 'drawer-overlay';
+    this.drawerOverlay.style.display = 'none';
+
+    // Side drawer
+    this.sideDrawer = document.createElement('div');
+    this.sideDrawer.className = 'side-drawer';
+
+    const inner = document.createElement('div');
+    inner.className = 'side-drawer__inner';
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'side-drawer__header';
+    const title = document.createElement('h3');
+    title.textContent = 'Menú';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'side-drawer__close';
+    closeBtn.setAttribute('aria-label', 'Cerrar menú');
+    closeBtn.innerHTML = '✕';
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    this.attachDrawerDrag(header);
+
+    // Content (two columns)
+    const content = document.createElement('div');
+    content.className = 'side-drawer__content';
+
+    const colServices = document.createElement('div');
+    colServices.className = 'drawer-column';
+    const colServicesTitle = document.createElement('h4');
+    colServicesTitle.textContent = 'Servicios';
+    const servicesListEl = document.createElement('div');
+    servicesListEl.className = 'drawer-list services-list';
+
+    // Duplicate items to enable smooth looping scroll (virtual loop)
+    const buildServiceItems = () => {
+      servicesListEl.innerHTML = '';
+      const items = [...this.servicesList];
+      items.forEach((s) => {
+        const btn = document.createElement('button');
+        btn.className = 'drawer-item';
+        btn.textContent = s;
+        btn.addEventListener('click', (e) => { e.stopPropagation(); console.log('Servicio seleccionado:', s); });
+        servicesListEl.appendChild(btn);
+      });
+    };
+    buildServiceItems();
+
+    colServices.appendChild(colServicesTitle);
+    colServices.appendChild(servicesListEl);
+
+    const colPlaces = document.createElement('div');
+    colPlaces.className = 'drawer-column';
+    const colPlacesTitle = document.createElement('h4');
+    colPlacesTitle.textContent = 'Lugares';
+    const placesListEl = document.createElement('div');
+    placesListEl.className = 'drawer-list places-list';
+
+    const buildPlacesItems = () => {
+      placesListEl.innerHTML = '';
+      const items = [...(this.destinationOptions || [])];
+      items.forEach((p) => {
+        const btn = document.createElement('button');
+        btn.className = 'drawer-item';
+        btn.textContent = p;
+        btn.addEventListener('click', (e) => { e.stopPropagation(); this.selectDestination(p); this.toggleDrawer(false); });
+        placesListEl.appendChild(btn);
+      });
+    };
+    buildPlacesItems();
+
+    colPlaces.appendChild(colPlacesTitle);
+    colPlaces.appendChild(placesListEl);
+
+    content.appendChild(colServices);
+    content.appendChild(colPlaces);
+
+    inner.appendChild(header);
+    inner.appendChild(content);
+    this.sideDrawer.appendChild(inner);
+
+    // Prevent clicks inside drawer from closing when overlay has handler
+    this.sideDrawer.addEventListener('click', (e) => e.stopPropagation());
+
+    document.body.appendChild(this.drawerOverlay);
+    document.body.appendChild(this.sideDrawer);
+
+    // close button
+    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); this.toggleDrawer(false); });
+    // overlay click closes drawer
+    this.drawerOverlay.addEventListener('click', () => this.toggleDrawer(false));
+
+  }
+
+  private attachDrawerDrag(dragHandle: HTMLElement): void {
+    if (!this.sideDrawer) return;
+
+    let startY = 0;
+    let startTop = 0;
+    let dragging = false;
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (!dragging || !this.sideDrawer) return;
+      const currentY = event.clientY;
+      const deltaY = currentY - startY;
+      const newTop = Math.min(Math.max(startTop + deltaY, 20), window.innerHeight - this.sideDrawer.offsetHeight - 20);
+      this.sideDrawer.style.top = `${newTop}px`;
+      this.sideDrawer.style.transform = 'translate(0, 0) scale(1)';
+    };
+
+    const onPointerUp = () => {
+      dragging = false;
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+
+    dragHandle.style.cursor = 'grab';
+    dragHandle.addEventListener('pointerdown', (event) => {
+      if (!this.sideDrawer) return;
+      event.preventDefault();
+      dragging = true;
+      startY = event.clientY;
+      startTop = this.sideDrawer.getBoundingClientRect().top;
+      dragHandle.style.cursor = 'grabbing';
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+    });
+  }
+
+  // Implements a simple looping scroll by adjusting scrollTop when reaching near ends
+  private attachDrawerControls(): void {
+    const hamb = document.getElementById('hamburgerMenuBtn');
+    if (hamb) {
+      hamb.addEventListener('click', (e) => { e.stopPropagation(); this.toggleDrawer(!this.drawerOpen); });
+    }
+  }
+
+  private toggleDrawer(open?: boolean): void {
+    const shouldOpen = typeof open === 'boolean' ? open : !this.drawerOpen;
+    this.drawerOpen = shouldOpen;
+    if (this.drawerOverlay) {
+      this.drawerOverlay.style.display = shouldOpen ? 'block' : 'none';
+      if (shouldOpen) this.drawerOverlay.classList.add('open'); else this.drawerOverlay.classList.remove('open');
+    }
+    if (this.sideDrawer) {
+      if (shouldOpen) this.sideDrawer.classList.add('open'); else this.sideDrawer.classList.remove('open');
+    }
   }
 
   private ensureLoaders(): void {
@@ -271,7 +428,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (view3DBtn) view3DBtn.disabled = this.viewMode === '3d';
     if (searchPlaceBtn) {
       searchPlaceBtn.disabled = false;
-      searchPlaceBtn.textContent = 'Buscar lugar';
+      searchPlaceBtn.textContent = '🔎 Buscar';
     }
     this.updateZoomButtons();
   }

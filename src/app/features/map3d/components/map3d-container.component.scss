@@ -42,6 +42,14 @@
   background: #fff;
 }
 
+.plan-image {
+  max-width: 95%;
+  max-height: 95%;
+  border: 2px solid #444;
+  border-radius: 6px;
+  background: #fff;
+}
+
 .plan-placeholder {
   display: flex;
   flex-direction: column;
@@ -214,9 +222,9 @@
 /* (removed unused keyframes to reduce bundle size) */
 
 .zoom-btn {
-  width: 80px;
-  height: 80px;
-  font-size: 32px;
+  width: 60px;
+  height: 60px;
+  font-size: 24px;
   font-weight: bold;
   background: rgb(255, 255, 255);
   color: black;
@@ -244,9 +252,10 @@
 }
 
 .search-menu {
-  position: absolute;
-  right: 20px;
-  bottom: 120px;
+  position: fixed;
+  top: 88px;
+  right: 16px;
+  bottom: auto;
   width: 320px;
   padding: 18px;
   border-radius: 20px;

@@ -194,7 +194,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     const header = document.createElement('div');
     header.className = 'side-drawer__header';
     const title = document.createElement('h3');
-    title.textContent = 'Menú';
+    title.textContent = 'A dónde desea ir';
     const closeBtn = document.createElement('button');
     closeBtn.className = 'side-drawer__close';
     closeBtn.setAttribute('aria-label', 'Cerrar menú');

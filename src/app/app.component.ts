@@ -15,7 +15,6 @@ export class AppComponent implements OnInit {
   constructor(private firebaseService: Firebase) {}
 
   async ngOnInit() {
-    const data = await this.firebaseService.getEdificios();
-    console.log('Edificios:', data);
+    await this.firebaseService.getEdificios();
   }
 }

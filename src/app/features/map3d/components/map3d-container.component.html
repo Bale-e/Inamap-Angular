@@ -39,7 +39,19 @@
         <span>Buscar destino</span>
         <button type="button" class="search-menu__close" (click)="toggleSearchMode()">✕</button>
       </div>
-      <input type="text" class="search-menu__input" placeholder="Escribe o elige un destino" [(ngModel)]="searchQuery" (input)="filterSearchOptions()" />
+      <input
+        type="text"
+        class="search-menu__input"
+        placeholder="Escribe o elige un destino"
+        [(ngModel)]="searchQuery"
+        (input)="handleSearchInput(searchQuery, searchOptionsDatalist)"
+        (change)="selectDestination(searchQuery)"
+        list="searchOptionsDatalist"
+        autocomplete="off"
+      />
+      <datalist #searchOptionsDatalist id="searchOptionsDatalist">
+        <option *ngFor="let option of filteredDestinations" [value]="option"></option>
+      </datalist>
     </div>
   </div>
 

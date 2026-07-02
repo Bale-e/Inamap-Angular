@@ -20,25 +20,72 @@ const app = initializeApp(firebaseConfig);
 console.log('Firebase inicializado:', app.name);
 const db  = getFirestore(app);
 
+const knownCollections = ['Edificios', 'navigation-paths', 'rutas'];
+let hasLoggedCollections = false;
+const loggedCollectionIds = new Set<string>();
+const collectionResultsCache = new Map<string, any[]>();
+
+function logCollectionOnce(collectionId: string, results: any[]) {
+  if (loggedCollectionIds.has(collectionId)) {
+    return;
+  }
+
+  loggedCollectionIds.add(collectionId);
+  console.log('Colección disponible:', collectionId, `(${results.length} documentos)`);
+
+  if (results.length > 0) {
+    console.log('Documentos:', results);
+  }
+}
+
+async function logAvailableCollections() {
+  if (hasLoggedCollections) {
+    return;
+  }
+
+  hasLoggedCollections = true;
+
+  try {
+    for (const collectionId of knownCollections) {
+      const snapshot = await getDocs(collection(db, collectionId));
+      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      collectionResultsCache.set(collectionId, results);
+      logCollectionOnce(collectionId, results);
+    }
+  } catch (error) {
+    console.error('No se pudieron obtener las colecciones de Firestore:', error);
+  }
+}
+
+void logAvailableCollections();
+
 @Injectable({
   providedIn: 'root'
 })
 export class Firebase {
+  constructor() {
+    void logAvailableCollections();
+  }
 
-  async getEdificios() {
-    const snapshot = await getDocs(collection(db, 'Edificios'));
+  private async fetchCollectionResults(collectionPath: string) {
+    const cachedResults = collectionResultsCache.get(collectionPath);
+    if (cachedResults) {
+      return cachedResults;
+    }
+
+    const snapshot = await getDocs(collection(db, collectionPath));
     const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    console.log('Firebase getEdificios:', { count: results.length, results });
+    collectionResultsCache.set(collectionPath, results);
+    logCollectionOnce(collectionPath, results);
     return results;
   }
 
+  async getEdificios() {
+    return this.fetchCollectionResults('Edificios');
+  }
+
   async getLocaciones(edificioId: string) {
-    const snapshot = await getDocs(
-      collection(db, `Edificios/${edificioId}/Locaciones`)
-    );
-    const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    console.log(`Firebase getLocaciones ${edificioId}:`, { count: results.length, results });
-    return results;
+    return this.fetchCollectionResults(`Edificios/${edificioId}/Locaciones`);
   }
 
   async getLocacionesPorPiso(edificioId: string, piso: string) {
@@ -47,9 +94,7 @@ export class Firebase {
       where('Piso', '==', piso)
     );
     const snapshot = await getDocs(q);
-    const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    console.log(`Firebase getLocacionesPorPiso ${edificioId} / ${piso}:`, { count: results.length, results });
-    return results;
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
   async getLocacionPorNombre(edificioId: string, piso: string, nombre: string) {
@@ -62,10 +107,7 @@ export class Firebase {
   }
 
   async getNavigationPaths() {
-    const snapshot = await getDocs(collection(db, 'navigation-paths'));
-    const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    console.log('getNavigationPaths:', results);
-    return results;
+    return this.fetchCollectionResults('navigation-paths');
   }
 
 async getNavigationPath(piso: string) {
@@ -76,9 +118,6 @@ async getNavigationPath(piso: string) {
 }
   
   async getRutas() {
-    const snapshot = await getDocs(collection(db, 'rutas'));
-    const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    console.log('getRutas:', results);
-    return results;
+    return this.fetchCollectionResults('rutas');
   }
 }

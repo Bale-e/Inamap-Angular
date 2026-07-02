@@ -412,10 +412,38 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (this.bannerControlsAttached) return;
     const view2DBtn = document.getElementById('view2DBtn');
     const view3DBtn = document.getElementById('view3DBtn');
-    const searchPlaceBtn = document.getElementById('searchPlaceBtn');
+    const searchPlaceInput = document.getElementById('searchPlaceInput') as HTMLInputElement | null;
     if (view2DBtn) view2DBtn.addEventListener('click', () => this.ngZone.run(() => this.setView('2d')));
     if (view3DBtn) view3DBtn.addEventListener('click', () => this.ngZone.run(() => this.setView('3d')));
-    if (searchPlaceBtn) searchPlaceBtn.addEventListener('click', () => this.ngZone.run(() => this.toggleSearchMode()));
+    if (searchPlaceInput) {
+      searchPlaceInput.addEventListener('focus', () => this.ngZone.run(() => {
+        this.searchModeEnabled = true;
+        this.searchQuery = searchPlaceInput.value;
+        this.filteredDestinations = [...this.destinationOptions];
+        this.cd.detectChanges();
+      }));
+      searchPlaceInput.addEventListener('input', () => this.ngZone.run(() => {
+        this.searchQuery = searchPlaceInput.value;
+        this.handleSearchInput(searchPlaceInput.value);
+        this.searchModeEnabled = true;
+        this.cd.detectChanges();
+      }));
+      searchPlaceInput.addEventListener('change', () => this.ngZone.run(() => {
+        const value = searchPlaceInput.value.trim();
+        if (value) {
+          this.selectDestination(value);
+        }
+      }));
+      searchPlaceInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          const value = searchPlaceInput.value.trim();
+          if (value) {
+            this.ngZone.run(() => this.selectDestination(value));
+          }
+        }
+      });
+    }
     this.bannerControlsAttached = true;
     this.updateBannerButtons();
   }
@@ -423,12 +451,12 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private updateBannerButtons(): void {
     const view2DBtn = document.getElementById('view2DBtn') as HTMLButtonElement | null;
     const view3DBtn = document.getElementById('view3DBtn') as HTMLButtonElement | null;
-    const searchPlaceBtn = document.getElementById('searchPlaceBtn') as HTMLButtonElement | null;
+    const searchPlaceInput = document.getElementById('searchPlaceInput') as HTMLInputElement | null;
     if (view2DBtn) view2DBtn.disabled = this.viewMode === '2d';
     if (view3DBtn) view3DBtn.disabled = this.viewMode === '3d';
-    if (searchPlaceBtn) {
-      searchPlaceBtn.disabled = false;
-      searchPlaceBtn.textContent = '🔎 Buscar';
+    if (searchPlaceInput) {
+      searchPlaceInput.disabled = false;
+      searchPlaceInput.placeholder = this.destinationOptions.length > 0 ? 'Buscar destino' : 'Cargando ubicaciones...';
     }
     this.updateZoomButtons();
   }
@@ -448,11 +476,21 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.updateBannerButtons();
   }
 
-  filterSearchOptions(): void {
-    const query = this.searchQuery.trim().toLowerCase();
+  handleSearchInput(query: string, datalist?: HTMLDataListElement | null): void {
+    this.searchQuery = query;
+    const normalizedQuery = query.trim().toLowerCase();
     this.filteredDestinations = this.destinationOptions.filter(option =>
-      option.toLowerCase().includes(query)
+      option.toLowerCase().includes(normalizedQuery)
     );
+
+    if (datalist) {
+      datalist.innerHTML = '';
+      this.filteredDestinations.forEach(option => {
+        const optionElement = document.createElement('option');
+        optionElement.value = option;
+        datalist.appendChild(optionElement);
+      });
+    }
   }
 
   selectDestination(destination: string): void {
@@ -502,7 +540,6 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private async loadLocationOptions(): Promise<void> {
     try {
       const locations = await this.firebaseService.getLocaciones("m0riTcScQk6A4SlXTy1E");
-      console.log('loadLocationOptions - locaciones recibidas:', locations);
       const options = locations
         .map((loc: any) => {
           const name = (loc.Nombre || loc.nombre || loc.name || loc.DisplayName || loc.displayName || loc.id || '').toString().trim();
@@ -513,11 +550,26 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       if (options.length > 0) {
         this.destinationOptions = Array.from(new Set(options));
         this.filteredDestinations = [...this.destinationOptions];
+        this.populateSearchSuggestions();
         this.cd.detectChanges();
       }
     } catch (error) {
       console.error('No se pudieron cargar las locaciones desde Firebase:', error);
     }
+  }
+
+  private populateSearchSuggestions(): void {
+    const suggestions = document.getElementById('searchPlaceSuggestions') as HTMLDataListElement | null;
+    if (!suggestions) {
+      return;
+    }
+
+    suggestions.innerHTML = '';
+    this.destinationOptions.forEach(option => {
+      const optionElement = document.createElement('option');
+      optionElement.value = option;
+      suggestions.appendChild(optionElement);
+    });
   }
 
   private updateSceneAppearance(): void {

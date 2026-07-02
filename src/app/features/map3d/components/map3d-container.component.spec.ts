@@ -11,13 +11,9 @@ describe('Map3dContainerComponent search autocomplete', () => {
     );
 
     component.destinationOptions = ['Biblioteca', 'Sala de Tutorías 1', 'Recepción'];
-    const datalist = document.createElement('datalist');
-
-    component.handleSearchInput('tut', datalist);
+    component.handleSearchInput('tut');
 
     expect(component.searchQuery).toBe('tut');
     expect(component.filteredDestinations).toEqual(['Sala de Tutorías 1']);
-    expect(datalist.options.length).toBe(1);
-    expect(datalist.options[0].value).toBe('Sala de Tutorías 1');
   });
 });

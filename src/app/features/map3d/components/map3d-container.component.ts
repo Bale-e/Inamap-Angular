@@ -39,9 +39,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private readonly boundaryNameRegExp = /wall|ground|floor|suelo|piso/i;
   private readonly topDownPanLimits = { minX: -14, maxX: 14, minZ: -14, maxZ: 14 };
   private isTopDownView = false;
-  searchModeEnabled = false;
   zoomOutEnabled = false;
   private bannerControlsAttached = false;
+  private searchInputElement: HTMLInputElement | null = null;
+  private searchSuggestionsPanel: HTMLDivElement | null = null;
   public cuerpo23HintVisible = false;
   public cuerpo23HintX = 0;
   public cuerpo23HintY = 0;
@@ -59,12 +60,18 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   selectedDestination: string | null = null;
 
   private onDocumentClick = (evt: MouseEvent): void => {
+    const target = evt.target as Node | null;
+    if (target && (this.searchInputElement?.contains(target) || this.searchSuggestionsPanel?.contains(target))) {
+      return;
+    }
+
     if (this.infoBox) {
       this.infoBox.style.display = 'none';
     }
     if (this.floorArrow) {
       this.floorArrow.style.display = 'none';
     }
+    this.hideSearchSuggestions();
   };
 
   // Estado y marcadores para demo de ruta
@@ -416,24 +423,23 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (view2DBtn) view2DBtn.addEventListener('click', () => this.ngZone.run(() => this.setView('2d')));
     if (view3DBtn) view3DBtn.addEventListener('click', () => this.ngZone.run(() => this.setView('3d')));
     if (searchPlaceInput) {
+      this.searchInputElement = searchPlaceInput;
+      this.createSearchSuggestionsPanel();
+
       searchPlaceInput.addEventListener('focus', () => this.ngZone.run(() => {
-        this.searchModeEnabled = true;
         this.searchQuery = searchPlaceInput.value;
-        this.filteredDestinations = [...this.destinationOptions];
-        this.cd.detectChanges();
+        this.handleSearchInput(searchPlaceInput.value);
+        this.updateSearchSuggestionsVisibility();
       }));
       searchPlaceInput.addEventListener('input', () => this.ngZone.run(() => {
         this.searchQuery = searchPlaceInput.value;
         this.handleSearchInput(searchPlaceInput.value);
-        this.searchModeEnabled = true;
+        this.updateSearchSuggestionsVisibility();
         this.cd.detectChanges();
       }));
-      searchPlaceInput.addEventListener('change', () => this.ngZone.run(() => {
-        const value = searchPlaceInput.value.trim();
-        if (value) {
-          this.selectDestination(value);
-        }
-      }));
+      searchPlaceInput.addEventListener('blur', () => {
+        setTimeout(() => this.hideSearchSuggestions(), 150);
+      });
       searchPlaceInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
           event.preventDefault();
@@ -461,42 +467,83 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.updateZoomButtons();
   }
 
-  private toggleSearchMode(): void {
-    if (this.viewMode !== '3d') {
-      this.setView('3d');
-    }
-    this.searchModeEnabled = !this.searchModeEnabled;
-    if (this.searchModeEnabled) {
-      this.searchQuery = '';
-      this.filteredDestinations = [...this.destinationOptions];
-    } else {
-      this.clearPath();
-      this.clearMarkers();
-    }
-    this.updateBannerButtons();
-  }
-
-  handleSearchInput(query: string, datalist?: HTMLDataListElement | null): void {
+  handleSearchInput(query: string): void {
     this.searchQuery = query;
     const normalizedQuery = query.trim().toLowerCase();
     this.filteredDestinations = this.destinationOptions.filter(option =>
       option.toLowerCase().includes(normalizedQuery)
     );
+    this.renderSearchSuggestions();
+  }
 
-    if (datalist) {
-      datalist.innerHTML = '';
-      this.filteredDestinations.forEach(option => {
-        const optionElement = document.createElement('option');
-        optionElement.value = option;
-        datalist.appendChild(optionElement);
-      });
+  private createSearchSuggestionsPanel(): void {
+    if (!this.searchInputElement || this.searchSuggestionsPanel) {
+      return;
+    }
+
+    const panel = document.createElement('div');
+    panel.className = 'search-suggestions-panel';
+    panel.style.display = 'none';
+    panel.addEventListener('mousedown', (event) => event.preventDefault());
+    this.searchSuggestionsPanel = panel;
+
+    const wrapper = this.searchInputElement.parentElement;
+    if (wrapper) {
+      wrapper.appendChild(panel);
+    } else {
+      document.body.appendChild(panel);
+    }
+  }
+
+  private updateSearchSuggestionsVisibility(): void {
+    if (!this.searchSuggestionsPanel) return;
+    const query = this.searchQuery.trim();
+    const hasMatches = this.filteredDestinations.length > 0;
+    this.searchSuggestionsPanel.style.display = hasMatches ? 'block' : 'none';
+    this.renderSearchSuggestions();
+  }
+
+  private renderSearchSuggestions(): void {
+    if (!this.searchSuggestionsPanel) return;
+
+    const maxItems = 8;
+    const items = this.filteredDestinations.slice(0, maxItems);
+    this.searchSuggestionsPanel.innerHTML = items.map(option =>
+      `<button type="button" class="search-suggestion-item" data-value="${option.replace(/"/g, '&quot;')}">${option}</button>`
+    ).join('');
+
+    const buttons = Array.from(this.searchSuggestionsPanel.querySelectorAll('button.search-suggestion-item'));
+    buttons.forEach(button => {
+      button.removeEventListener('click', this.onSuggestionClick as any);
+      button.addEventListener('click', this.onSuggestionClick as any);
+    });
+  }
+
+  private onSuggestionClick = (event: MouseEvent): void => {
+    const target = event.currentTarget as HTMLElement | null;
+    if (!target || !this.searchInputElement) return;
+    const value = target.getAttribute('data-value')?.trim();
+    if (!value) return;
+    this.searchInputElement.value = value;
+    this.searchQuery = value;
+    this.filteredDestinations = [value];
+    this.hideSearchSuggestions();
+    this.selectDestination(value);
+  };
+
+  private hideSearchSuggestions(): void {
+    if (this.searchSuggestionsPanel) {
+      this.searchSuggestionsPanel.style.display = 'none';
     }
   }
 
   selectDestination(destination: string): void {
     this.selectedDestination = destination;
     this.searchQuery = destination;
-    this.searchModeEnabled = false;
+    if (this.searchInputElement) {
+      this.searchInputElement.value = destination;
+    }
+    this.hideSearchSuggestions();
     this.searchDestination(destination);
     this.updateBannerButtons();
   }
@@ -550,26 +597,11 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       if (options.length > 0) {
         this.destinationOptions = Array.from(new Set(options));
         this.filteredDestinations = [...this.destinationOptions];
-        this.populateSearchSuggestions();
         this.cd.detectChanges();
       }
     } catch (error) {
       console.error('No se pudieron cargar las locaciones desde Firebase:', error);
     }
-  }
-
-  private populateSearchSuggestions(): void {
-    const suggestions = document.getElementById('searchPlaceSuggestions') as HTMLDataListElement | null;
-    if (!suggestions) {
-      return;
-    }
-
-    suggestions.innerHTML = '';
-    this.destinationOptions.forEach(option => {
-      const optionElement = document.createElement('option');
-      optionElement.value = option;
-      suggestions.appendChild(optionElement);
-    });
   }
 
   private updateSceneAppearance(): void {

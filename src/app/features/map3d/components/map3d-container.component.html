@@ -5,6 +5,9 @@
 
 <div class="map-body">
   <div class="view-3d">
+    <div class="view-banner">
+      <input id="searchPlaceInput" class="search-input" type="text" placeholder="Buscar destino" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+    </div>
     <div #renderCanvas class="render-canvas"></div>
 
     <div class="floor-action">
@@ -34,25 +37,7 @@
       <button class="zoom-btn" (click)="zoomOut()" title="Alejar" [disabled]="!zoomOutEnabled">-</button>
     </div>
 
-    <div class="search-menu" *ngIf="searchModeEnabled">
-      <div class="search-menu__header">
-        <span>Buscar destino</span>
-        <button type="button" class="search-menu__close" (click)="toggleSearchMode()">✕</button>
-      </div>
-      <input
-        type="text"
-        class="search-menu__input"
-        placeholder="Escribe o elige un destino"
-        [(ngModel)]="searchQuery"
-        (input)="handleSearchInput(searchQuery, searchOptionsDatalist)"
-        (change)="selectDestination(searchQuery)"
-        list="searchOptionsDatalist"
-        autocomplete="off"
-      />
-      <datalist #searchOptionsDatalist id="searchOptionsDatalist">
-        <option *ngFor="let option of filteredDestinations" [value]="option"></option>
-      </datalist>
-    </div>
+    <!-- Eliminé el panel secundario; la barra principal es el único control de búsqueda. -->
   </div>
 
   <!-- Fotocopiadora -->

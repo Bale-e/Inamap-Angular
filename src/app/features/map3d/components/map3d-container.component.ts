@@ -26,6 +26,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private readonly firstFloorModel = 'Edifico A - Piso 1.obj';
   private readonly secondFloorModel = 'Edificio A - piso 2.obj';
   private readonly thirdFloorModel = 'Edificio A - piso 3.obj';
+  private readonly buildingBFirstFloorModel = 'Edificio B - Piso 1.obj';
   currentFloor = this.firstFloorModel;
 
   private engine: BABYLON.Engine | null = null;
@@ -178,7 +179,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     });
     this.buildingBMarker.addEventListener('click', (e) => {
       e.stopPropagation();
-      console.log('Navegando a Edificio B - Piso 1');
+      this.goToBuildingBFirstFloor();
     });
     document.body.appendChild(this.buildingBMarker);
   }
@@ -700,6 +701,19 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.floorDialogVisible = false;
   }
 
+  private goToBuildingBFirstFloor(): void {
+    if (this.currentFloor !== this.buildingBFirstFloorModel) {
+      this.currentFloor = this.buildingBFirstFloorModel;
+      if (this.viewMode === '3d') {
+        this.init3dScene();
+      }
+    }
+
+    if (this.viewMode !== '3d') {
+      this.setView('3d');
+    }
+  }
+
   changeFloor(floor: string): void {
     this.currentFloor = floor;
     if (this.viewMode === '3d') this.init3dScene();
@@ -964,8 +978,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private async load3dModel(canvas: HTMLCanvasElement): Promise<void> {
     if (!this.scene) return;
 
-    const modelRoot = '/assets/3d-models/Edificio A/';
     const modelName = this.currentFloor;
+    const modelRoot = modelName === this.buildingBFirstFloorModel
+      ? '/assets/3d-models/Edificio B/'
+      : '/assets/3d-models/Edificio A/';
 
     try {
       const result = await BABYLON.SceneLoader.ImportMeshAsync(
@@ -1185,16 +1201,14 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private updateBuildingBMarkerPosition(canvas: HTMLCanvasElement): void {
     if (!this.buildingBMarker || !this.scene || !this.camera || !this.engine) return;
 
-    // Solo mostrar el marcador si estamos en el piso 1 en vista 3D
-    const isFirstFloor = this.currentFloor === this.firstFloorModel;
-    if (!isFirstFloor || this.viewMode !== '3d') {
+    // Mostrar el marcador tanto en el primer piso del edificio A como en el edificio B
+    const isRelevantFloor = this.currentFloor === this.firstFloorModel || this.currentFloor === this.buildingBFirstFloorModel;
+    if (!isRelevantFloor || this.viewMode !== '3d') {
       this.buildingBMarker.style.display = 'none';
       return;
     }
 
-    // Centro calculado de los 4 puntos:
-    // (-12.42, 0.01, -0.35), (-10.62, 0.01, -0.29), (-10.69, 0.01, -2.93), (-12.31, 0.01, -2.95)
-    const markerWorldPos = new BABYLON.Vector3(-11.51, 0.01, -1.63);
+    const markerWorldPos = new BABYLON.Vector3(11.07, 0.05, 1.13);
 
     try {
       // Obtener las matrices necesarias

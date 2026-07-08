@@ -54,6 +54,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private floorArrow: HTMLDivElement | null = null;
   private buildingBMarker: HTMLDivElement | null = null;
   private buildingAMarker: HTMLDivElement | null = null;
+  private mainMapMarker: HTMLDivElement | null = null;
   private drawerOverlay: HTMLDivElement | null = null;
   private sideDrawer: HTMLDivElement | null = null;
   private drawerOpen = false;
@@ -91,9 +92,6 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     'Cuerpo27': { nombre: 'Sala de Tutorías 4',          desc: 'Sala de apoyo académico y reuniones estudiantiles.' }
   };
 
-  // ── Cuerpos del primer piso de Edificio A que abren el diálogo de selección de piso ────
-  private floorSelectionBodies = ['Cuerpo21', 'Cuerpo14', 'Cuerpo19', 'Cuerpo25', 'Cuerpo11'];
-
   private readonly mainEntranceAccess = new BABYLON.Vector3(11.22, 0.01, 0.12);
 
   constructor(
@@ -109,6 +107,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.createFloorArrow();
     this.createBuildingBMarker();
     this.createBuildingAMarker();
+    this.createMainMapMarker();
     this.createDrawerElements();
     this.attachDrawerControls();
     this.loadLocationOptions().catch((error) => console.error('Error cargando locaciones:', error));
@@ -205,7 +204,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       cursor: pointer;
       transition: background-color 0.2s;
     `;
-    this.buildingAMarker.innerHTML = '→ Ir al Edificio A - Piso 1';
+    this.buildingAMarker.innerHTML = '→ Ir al mapa principal';
     this.buildingAMarker.addEventListener('mouseenter', () => {
       if (this.buildingAMarker) {
         this.buildingAMarker.style.backgroundColor = 'rgba(0,0,0,0.95)';
@@ -218,9 +217,42 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     });
     this.buildingAMarker.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.goToBuildingAFirstFloor();
+      this.handleBuildingAMarkerClick();
     });
     document.body.appendChild(this.buildingAMarker);
+  }
+
+  private createMainMapMarker(): void {
+    this.mainMapMarker = document.createElement('div');
+    this.mainMapMarker.style.cssText = `
+      display: none;
+      position: fixed;
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      z-index: 999;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    `;
+    this.mainMapMarker.innerHTML = '→ Ir al mapa principal';
+    this.mainMapMarker.addEventListener('mouseenter', () => {
+      if (this.mainMapMarker) {
+        this.mainMapMarker.style.backgroundColor = 'rgba(0,0,0,0.95)';
+      }
+    });
+    this.mainMapMarker.addEventListener('mouseleave', () => {
+      if (this.mainMapMarker) {
+        this.mainMapMarker.style.backgroundColor = 'rgba(0,0,0,0.8)';
+      }
+    });
+    this.mainMapMarker.addEventListener('click', (e) => {
+      e.stopPropagation();
+      console.log('Mapa principal pendiente de implementar');
+    });
+    document.body.appendChild(this.mainMapMarker);
   }
 
   // ── Crea elementos del drawer (overlay + panel lateral) ─────────────────
@@ -778,6 +810,31 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  public isFloorSelectionTrigger(meshName: string | null | undefined): boolean {
+    const normalizedMeshName = meshName?.replace(/\s+/g, '').toLowerCase();
+    if (!normalizedMeshName) {
+      return false;
+    }
+
+    if (this.currentBuilding === 'A' && this.currentFloor === this.secondFloorModel) {
+      return ['cuerpo23', 'cuerpo26', 'cuerpo8', 'cuerpo25', 'cuerpo30'].includes(normalizedMeshName);
+    }
+
+    if (this.currentBuilding === 'A' && this.currentFloor === this.thirdFloorModel) {
+      return ['cuerpo6', 'cuerpo45', 'cuerpo26', 'cuerpo39'].includes(normalizedMeshName);
+    }
+
+    if (this.currentBuilding === 'B' && this.currentFloor === this.buildingBSecondFloorModel) {
+      return ['cuerpo9'].includes(normalizedMeshName);
+    }
+
+    if (this.currentBuilding === 'B' && this.currentFloor === this.buildingBFirstFloorModel) {
+      return ['cuerpo0'].includes(normalizedMeshName);
+    }
+
+    return false;
+  }
+
   private goToBuildingBFirstFloor(): void {
     this.currentBuilding = 'B';
     if (this.currentFloor !== this.buildingBFirstFloorModel) {
@@ -832,6 +889,73 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (this.viewMode !== '3d') {
       this.setView('3d');
     }
+  }
+
+  private goToBuildingASecondFloor(): void {
+    this.currentBuilding = 'A';
+    if (this.currentFloor !== this.secondFloorModel) {
+      this.currentFloor = this.secondFloorModel;
+      if (this.viewMode === '3d') {
+        this.init3dScene();
+      }
+    }
+
+    if (this.viewMode !== '3d') {
+      this.setView('3d');
+    }
+  }
+
+  private goToBuildingAThirdFloor(): void {
+    this.currentBuilding = 'A';
+    if (this.currentFloor !== this.thirdFloorModel) {
+      this.currentFloor = this.thirdFloorModel;
+      if (this.viewMode === '3d') {
+        this.init3dScene();
+      }
+    }
+
+    if (this.viewMode !== '3d') {
+      this.setView('3d');
+    }
+  }
+
+  private handleBuildingAMarkerClick(): void {
+    if (this.currentFloor === this.buildingBThirdFloorModel) {
+      this.goToBuildingAThirdFloor();
+    } else if (this.currentFloor === this.buildingBSecondFloorModel) {
+      this.goToBuildingASecondFloor();
+    } else {
+      this.goToBuildingAFirstFloor();
+    }
+  }
+
+  public getBuildingATransitionMarkerState(): { label: string; position: { x: number; y: number; z: number } } | null {
+    if (this.currentBuilding !== 'B') {
+      return null;
+    }
+
+    if (this.currentFloor === this.buildingBThirdFloorModel) {
+      return {
+        label: 'Ir al Edificio A - Piso 3',
+        position: { x: -0.49, y: 0.01, z: -11.40 }
+      };
+    }
+
+    if (this.currentFloor === this.buildingBSecondFloorModel) {
+      return {
+        label: 'Ir al Edificio A - Piso 2',
+        position: { x: -4.43, y: 0.01, z: -3.25 }
+      };
+    }
+
+    if (this.currentFloor === this.buildingBFirstFloorModel) {
+      return {
+        label: 'Ir al mapa principal',
+        position: { x: 12.18, y: 0.01, z: -0.23 }
+      };
+    }
+
+    return null;
   }
 
   changeFloor(floor: string): void {
@@ -1220,30 +1344,32 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           const coords = pickResult.pickedPoint;
           console.log(`Clic en: ${target}, Coordenadas: (${coords?.x.toFixed(2)}, ${coords?.y.toFixed(2)}, ${coords?.z.toFixed(2)})`);
 
-          // ── Abrir diálogo de selección de piso solo en el primer piso de Edificio A
-          const isFloorTrigger = pickResult.pickedMesh && this.currentFloor === this.firstFloorModel && this.floorSelectionBodies.includes(pickResult.pickedMesh.name);
+          const isFloorTrigger = pickResult.pickedMesh && this.isFloorSelectionTrigger(pickResult.pickedMesh.name);
           if (isFloorTrigger) {
             this.openFloorDialog();
-          } else {
-            this.closeFloorDialog();
-          }
-
-          // ── Mostrar infoBox si hay info para el mesh clicado ──
-          if (pickResult.pickedMesh && this.infoBox) {
-            const info = this.infoData[pickResult.pickedMesh.name];
-            if (info) {
-              this.infoBox.innerHTML = `
-                <p style="font-weight:bold;font-size:14px;margin:0 0 4px">${info.nombre}</p>
-                <p style="font-size:12px;color:#555;margin:0">${info.desc}</p>
-              `;
-              this.infoBox.style.display = 'block';
-              this.infoBox.style.left = (evt.clientX + 15) + 'px';
-              this.infoBox.style.top  = (evt.clientY + 15) + 'px';
-            } else {
+            if (this.infoBox) {
               this.infoBox.style.display = 'none';
             }
-          } else if (this.infoBox) {
-            this.infoBox.style.display = 'none';
+          } else {
+            this.closeFloorDialog();
+
+            // ── Mostrar infoBox si hay info para el mesh clicado ──
+            if (pickResult.pickedMesh && this.infoBox) {
+              const info = this.infoData[pickResult.pickedMesh.name];
+              if (info) {
+                this.infoBox.innerHTML = `
+                  <p style="font-weight:bold;font-size:14px;margin:0 0 4px">${info.nombre}</p>
+                  <p style="font-size:12px;color:#555;margin:0">${info.desc}</p>
+                `;
+                this.infoBox.style.display = 'block';
+                this.infoBox.style.left = (evt.clientX + 15) + 'px';
+                this.infoBox.style.top  = (evt.clientY + 15) + 'px';
+              } else {
+                this.infoBox.style.display = 'none';
+              }
+            } else if (this.infoBox) {
+              this.infoBox.style.display = 'none';
+            }
           }
 
           // --- DEMO: seleccionar punto A y punto B con dos clics para dibujar ruta ---
@@ -1330,6 +1456,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     
     // Actualizar marcador de Edificio A (desde Edificio B)
     this.updateBuildingAMarkerVisibility(canvas);
+    // Actualizar cartel de mapa principal en Edificio A piso 1
+    this.updateMainMapMarkerVisibility(canvas);
   }
 
   private updateBuildingBMarkerVisibility(canvas: HTMLCanvasElement): void {
@@ -1393,15 +1521,17 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private updateBuildingAMarkerVisibility(canvas: HTMLCanvasElement): void {
     if (!this.buildingAMarker || !this.scene || !this.camera || !this.engine) return;
 
-    // El marcador solo aparece en el Edificio B piso 1
-    const isInBuildingBFloor1 = this.currentBuilding === 'B' && this.currentFloor === this.buildingBFirstFloorModel;
+    const markerState = this.getBuildingATransitionMarkerState();
+    const isInBuildingB = this.currentBuilding === 'B' && markerState !== null;
 
-    if (!isInBuildingBFloor1 || this.viewMode !== '3d') {
+    if (!isInBuildingB || this.viewMode !== '3d') {
       this.buildingAMarker.style.display = 'none';
       return;
     }
 
-    const markerWorldPos = new BABYLON.Vector3(-4.03, 0.17, -3.20);
+    this.buildingAMarker.innerHTML = `→ ${markerState.label}`;
+
+    const markerWorldPos = new BABYLON.Vector3(markerState.position.x, markerState.position.y, markerState.position.z);
 
     try {
       // Obtener las matrices necesarias
@@ -1433,6 +1563,45 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     } catch (error) {
       console.warn('Error actualizando posición del marcador de Edificio A:', error);
       this.buildingAMarker.style.display = 'none';
+    }
+  }
+
+  private updateMainMapMarkerVisibility(canvas: HTMLCanvasElement): void {
+    if (!this.mainMapMarker || !this.scene || !this.camera || !this.engine) return;
+
+    const isInBuildingAFirstFloor = this.currentBuilding === 'A' && this.currentFloor === this.firstFloorModel;
+
+    if (!isInBuildingAFirstFloor || this.viewMode !== '3d') {
+      this.mainMapMarker.style.display = 'none';
+      return;
+    }
+
+    const markerWorldPos = new BABYLON.Vector3(-9.41, 0.01, -4.88);
+
+    try {
+      const viewMatrix = this.camera.getViewMatrix();
+      const projectionMatrix = this.camera.getProjectionMatrix();
+      const transformMatrix = viewMatrix.multiply(projectionMatrix);
+      const viewport = new BABYLON.Viewport(0, 0, this.engine.getRenderWidth(), this.engine.getRenderHeight());
+      const screenCoords = BABYLON.Vector3.Project(
+        markerWorldPos,
+        BABYLON.Matrix.Identity(),
+        transformMatrix,
+        viewport
+      );
+
+      if (screenCoords.z > 0 && screenCoords.z < 1 &&
+          screenCoords.x > 0 && screenCoords.x < this.engine.getRenderWidth() &&
+          screenCoords.y > 0 && screenCoords.y < this.engine.getRenderHeight()) {
+        this.mainMapMarker.style.display = 'block';
+        this.mainMapMarker.style.left = (screenCoords.x - 60) + 'px';
+        this.mainMapMarker.style.top = (screenCoords.y - 30) + 'px';
+      } else {
+        this.mainMapMarker.style.display = 'none';
+      }
+    } catch (error) {
+      console.warn('Error actualizando posición del cartel de mapa principal:', error);
+      this.mainMapMarker.style.display = 'none';
     }
   }
 

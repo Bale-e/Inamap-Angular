@@ -27,7 +27,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private readonly secondFloorModel = 'Edificio A - piso 2.obj';
   private readonly thirdFloorModel = 'Edificio A - piso 3.obj';
   private readonly buildingBFirstFloorModel = 'Edificio B - Piso 1.obj';
+  private readonly buildingBSecondFloorModel = 'Edificio B - Piso 2.obj';
+  private readonly buildingBThirdFloorModel = 'Edificio B - Piso 3.obj';
   currentFloor = this.firstFloorModel;
+  private currentBuilding: 'A' | 'B' = 'A';
 
   private engine: BABYLON.Engine | null = null;
   private scene: BABYLON.Scene | null = null;
@@ -50,6 +53,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private infoBox: HTMLDivElement | null = null;
   private floorArrow: HTMLDivElement | null = null;
   private buildingBMarker: HTMLDivElement | null = null;
+  private buildingAMarker: HTMLDivElement | null = null;
   private drawerOverlay: HTMLDivElement | null = null;
   private sideDrawer: HTMLDivElement | null = null;
   private drawerOpen = false;
@@ -104,6 +108,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.createInfoBox();
     this.createFloorArrow();
     this.createBuildingBMarker();
+    this.createBuildingAMarker();
     this.createDrawerElements();
     this.attachDrawerControls();
     this.loadLocationOptions().catch((error) => console.error('Error cargando locaciones:', error));
@@ -150,7 +155,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     document.body.appendChild(this.floorArrow);
   }
 
-  // ── Crea el marcador para Edificio B ─────────────────────
+  // ── Crea el marcador para Edificio B (desde Edificio A) ─────────────────────
   private createBuildingBMarker(): void {
     this.buildingBMarker = document.createElement('div');
     this.buildingBMarker.style.cssText = `
@@ -179,9 +184,43 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     });
     this.buildingBMarker.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.goToBuildingBFirstFloor();
+      this.handleBuildingBMarkerClick();
     });
     document.body.appendChild(this.buildingBMarker);
+  }
+
+  // ── Crea el marcador para Edificio A (desde Edificio B) ─────────────────────
+  private createBuildingAMarker(): void {
+    this.buildingAMarker = document.createElement('div');
+    this.buildingAMarker.style.cssText = `
+      display: none;
+      position: fixed;
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      z-index: 999;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    `;
+    this.buildingAMarker.innerHTML = '→ Ir al Edificio A - Piso 1';
+    this.buildingAMarker.addEventListener('mouseenter', () => {
+      if (this.buildingAMarker) {
+        this.buildingAMarker.style.backgroundColor = 'rgba(0,0,0,0.95)';
+      }
+    });
+    this.buildingAMarker.addEventListener('mouseleave', () => {
+      if (this.buildingAMarker) {
+        this.buildingAMarker.style.backgroundColor = 'rgba(0,0,0,0.8)';
+      }
+    });
+    this.buildingAMarker.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.goToBuildingAFirstFloor();
+    });
+    document.body.appendChild(this.buildingAMarker);
   }
 
   // ── Crea elementos del drawer (overlay + panel lateral) ─────────────────
@@ -358,6 +397,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (this.buildingBMarker) {
       document.body.removeChild(this.buildingBMarker);
       this.buildingBMarker = null;
+    }
+    if (this.buildingAMarker) {
+      document.body.removeChild(this.buildingAMarker);
+      this.buildingAMarker = null;
     }
   }
 
@@ -660,17 +703,31 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   get floorActionLabel(): string {
-    if (this.currentFloor === this.secondFloorModel) {
-      return 'Ir al primer piso';
+    // Edificio A
+    if (this.currentBuilding === 'A') {
+      if (this.currentFloor === this.secondFloorModel) {
+        return 'Ir al primer piso';
+      }
+      if (this.currentFloor === this.thirdFloorModel) {
+        return 'Ir al segundo piso';
+      }
     }
-    if (this.currentFloor === this.thirdFloorModel) {
-      return 'Ir al segundo piso';
+    // Edificio B
+    if (this.currentBuilding === 'B') {
+      if (this.currentFloor === this.buildingBSecondFloorModel) {
+        return 'Ir al primer piso';
+      }
+      if (this.currentFloor === this.buildingBThirdFloorModel) {
+        return 'Ir al segundo piso';
+      }
     }
     return 'Ir al segundo piso';
   }
 
   get floorActionIcon(): string {
-    return this.currentFloor === this.firstFloorModel ? '↑' : '↓';
+    const isFirstFloor = (this.currentBuilding === 'A' && this.currentFloor === this.firstFloorModel) ||
+                         (this.currentBuilding === 'B' && this.currentFloor === this.buildingBFirstFloorModel);
+    return isFirstFloor ? '↑' : '↓';
   }
 
   openFloorDialog(): void {
@@ -679,11 +736,21 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
   selectFloor(floor: 'first' | 'second' | 'third'): void {
     this.floorDialogVisible = false;
-    const targetFloor = floor === 'first'
-      ? this.firstFloorModel
-      : floor === 'second'
-        ? this.secondFloorModel
-        : this.thirdFloorModel;
+    let targetFloor: string;
+
+    if (this.currentBuilding === 'A') {
+      targetFloor = floor === 'first'
+        ? this.firstFloorModel
+        : floor === 'second'
+          ? this.secondFloorModel
+          : this.thirdFloorModel;
+    } else {
+      targetFloor = floor === 'first'
+        ? this.buildingBFirstFloorModel
+        : floor === 'second'
+          ? this.buildingBSecondFloorModel
+          : this.buildingBThirdFloorModel;
+    }
 
     if (this.currentFloor !== targetFloor) {
       this.currentFloor = targetFloor;
@@ -701,9 +768,62 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.floorDialogVisible = false;
   }
 
+  private handleBuildingBMarkerClick(): void {
+    if (this.currentFloor === this.secondFloorModel) {
+      this.goToBuildingBSecondFloor();
+    } else if (this.currentFloor === this.thirdFloorModel) {
+      this.goToBuildingBThirdFloor();
+    } else {
+      this.goToBuildingBFirstFloor();
+    }
+  }
+
   private goToBuildingBFirstFloor(): void {
+    this.currentBuilding = 'B';
     if (this.currentFloor !== this.buildingBFirstFloorModel) {
       this.currentFloor = this.buildingBFirstFloorModel;
+      if (this.viewMode === '3d') {
+        this.init3dScene();
+      }
+    }
+
+    if (this.viewMode !== '3d') {
+      this.setView('3d');
+    }
+  }
+
+  private goToBuildingBSecondFloor(): void {
+    this.currentBuilding = 'B';
+    if (this.currentFloor !== this.buildingBSecondFloorModel) {
+      this.currentFloor = this.buildingBSecondFloorModel;
+      if (this.viewMode === '3d') {
+        this.init3dScene();
+      }
+    }
+
+    if (this.viewMode !== '3d') {
+      this.setView('3d');
+    }
+  }
+
+  private goToBuildingBThirdFloor(): void {
+    this.currentBuilding = 'B';
+    if (this.currentFloor !== this.buildingBThirdFloorModel) {
+      this.currentFloor = this.buildingBThirdFloorModel;
+      if (this.viewMode === '3d') {
+        this.init3dScene();
+      }
+    }
+
+    if (this.viewMode !== '3d') {
+      this.setView('3d');
+    }
+  }
+
+  private goToBuildingAFirstFloor(): void {
+    this.currentBuilding = 'A';
+    if (this.currentFloor !== this.firstFloorModel) {
+      this.currentFloor = this.firstFloorModel;
       if (this.viewMode === '3d') {
         this.init3dScene();
       }
@@ -979,9 +1099,13 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (!this.scene) return;
 
     const modelName = this.currentFloor;
-    const modelRoot = modelName === this.buildingBFirstFloorModel
+    const isBuildingB = [this.buildingBFirstFloorModel, this.buildingBSecondFloorModel, this.buildingBThirdFloorModel].includes(modelName);
+    const modelRoot = isBuildingB
       ? '/assets/3d-models/Edificio B/'
       : '/assets/3d-models/Edificio A/';
+
+    // Actualizar el edificio actual
+    this.currentBuilding = isBuildingB ? 'B' : 'A';
 
     try {
       const result = await BABYLON.SceneLoader.ImportMeshAsync(
@@ -1199,13 +1323,36 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private updateBuildingBMarkerPosition(canvas: HTMLCanvasElement): void {
+    if (!this.scene || !this.camera || !this.engine) return;
+
+    // Actualizar marcador de Edificio B (desde Edificio A)
+    this.updateBuildingBMarkerVisibility(canvas);
+    
+    // Actualizar marcador de Edificio A (desde Edificio B)
+    this.updateBuildingAMarkerVisibility(canvas);
+  }
+
+  private updateBuildingBMarkerVisibility(canvas: HTMLCanvasElement): void {
     if (!this.buildingBMarker || !this.scene || !this.camera || !this.engine) return;
 
-    // Mostrar el marcador tanto en el primer piso del edificio A como en el edificio B
-    const isRelevantFloor = this.currentFloor === this.firstFloorModel || this.currentFloor === this.buildingBFirstFloorModel;
-    if (!isRelevantFloor || this.viewMode !== '3d') {
+    // El marcador solo aparece en el Edificio A, en los pisos 1, 2 y 3
+    const isInBuildingA = this.currentBuilding === 'A';
+    const isRelevantFloor = this.currentFloor === this.firstFloorModel || 
+                            this.currentFloor === this.secondFloorModel || 
+                            this.currentFloor === this.thirdFloorModel;
+
+    if (!isInBuildingA || !isRelevantFloor || this.viewMode !== '3d') {
       this.buildingBMarker.style.display = 'none';
       return;
+    }
+
+    // Actualizar el texto del marcador según el piso
+    if (this.currentFloor === this.firstFloorModel) {
+      this.buildingBMarker.innerHTML = '→ Ir al Edificio B - Piso 1';
+    } else if (this.currentFloor === this.secondFloorModel) {
+      this.buildingBMarker.innerHTML = '→ Ir al Edificio B - Piso 2';
+    } else if (this.currentFloor === this.thirdFloorModel) {
+      this.buildingBMarker.innerHTML = '→ Ir al Edificio B - Piso 3';
     }
 
     const markerWorldPos = new BABYLON.Vector3(11.07, 0.05, 1.13);
@@ -1238,8 +1385,54 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
         this.buildingBMarker.style.display = 'none';
       }
     } catch (error) {
-      console.warn('Error actualizando posición del marcador:', error);
+      console.warn('Error actualizando posición del marcador de Edificio B:', error);
       this.buildingBMarker.style.display = 'none';
+    }
+  }
+
+  private updateBuildingAMarkerVisibility(canvas: HTMLCanvasElement): void {
+    if (!this.buildingAMarker || !this.scene || !this.camera || !this.engine) return;
+
+    // El marcador solo aparece en el Edificio B piso 1
+    const isInBuildingBFloor1 = this.currentBuilding === 'B' && this.currentFloor === this.buildingBFirstFloorModel;
+
+    if (!isInBuildingBFloor1 || this.viewMode !== '3d') {
+      this.buildingAMarker.style.display = 'none';
+      return;
+    }
+
+    const markerWorldPos = new BABYLON.Vector3(-4.03, 0.17, -3.20);
+
+    try {
+      // Obtener las matrices necesarias
+      const viewMatrix = this.camera.getViewMatrix();
+      const projectionMatrix = this.camera.getProjectionMatrix();
+      
+      // Crear matriz de transformación combinada (view * projection)
+      const transformMatrix = viewMatrix.multiply(projectionMatrix);
+
+      // Proyectar el punto 3D a coordenadas de pantalla
+      const viewport = new BABYLON.Viewport(0, 0, this.engine.getRenderWidth(), this.engine.getRenderHeight());
+      const screenCoords = BABYLON.Vector3.Project(
+        markerWorldPos,
+        BABYLON.Matrix.Identity(),
+        transformMatrix,
+        viewport
+      );
+
+      // Verificar si el punto está dentro de la pantalla (z > 0 significa está adelante de la cámara)
+      if (screenCoords.z > 0 && screenCoords.z < 1 &&
+          screenCoords.x > 0 && screenCoords.x < this.engine.getRenderWidth() &&
+          screenCoords.y > 0 && screenCoords.y < this.engine.getRenderHeight()) {
+        this.buildingAMarker.style.display = 'block';
+        this.buildingAMarker.style.left = (screenCoords.x - 60) + 'px'; // Centrar horizontalmente
+        this.buildingAMarker.style.top = (screenCoords.y - 30) + 'px';  // Posicionar arriba del marcador
+      } else {
+        this.buildingAMarker.style.display = 'none';
+      }
+    } catch (error) {
+      console.warn('Error actualizando posición del marcador de Edificio A:', error);
+      this.buildingAMarker.style.display = 'none';
     }
   }
 

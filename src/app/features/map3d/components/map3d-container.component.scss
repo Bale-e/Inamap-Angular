@@ -324,3 +324,9 @@
 .marker__nombre { font-weight:700; margin:0 0 4px; }
 .marker__desc { margin:0; font-size:12px; }
 
+
+@media (max-width: 768px) {
+  .zoom-controls {
+    display: none;
+  }
+}

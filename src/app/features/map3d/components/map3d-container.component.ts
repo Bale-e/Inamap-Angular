@@ -58,6 +58,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private drawerOverlay: HTMLDivElement | null = null;
   private sideDrawer: HTMLDivElement | null = null;
   private drawerOpen = false;
+  private detailPanelOverlay: HTMLDivElement | null = null;
+  private detailPanel: HTMLDivElement | null = null;
+  private detailPanelOpen = false;
   private servicesList: string[] = ['Cafetería', 'Biblioteca', 'Recepción', 'Baños', 'Sala de Profesores', 'Soporte Técnico', 'Tienda'];
   floorDialogVisible = false;
   searchQuery = '';
@@ -77,6 +80,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (this.floorArrow) {
       this.floorArrow.style.display = 'none';
     }
+    this.closeDetailPanel();
     this.hideSearchSuggestions();
   };
 
@@ -108,6 +112,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.createBuildingBMarker();
     this.createBuildingAMarker();
     this.createMainMapMarker();
+    this.createDetailPanel();
     this.createDrawerElements();
     this.attachDrawerControls();
     this.loadLocationOptions().catch((error) => console.error('Error cargando locaciones:', error));
@@ -253,6 +258,73 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       console.log('Mapa principal pendiente de implementar');
     });
     document.body.appendChild(this.mainMapMarker);
+  }
+
+  // ── Crea un panel flotante tipo drawer para información del cuerpo 9 ───────
+  private createDetailPanel(): void {
+    this.detailPanelOverlay = document.createElement('div');
+    this.detailPanelOverlay.className = 'detail-panel-overlay';
+    this.detailPanelOverlay.style.display = 'none';
+
+    this.detailPanel = document.createElement('div');
+    this.detailPanel.className = 'detail-panel';
+
+    const inner = document.createElement('div');
+    inner.className = 'detail-panel__inner';
+
+    const header = document.createElement('div');
+    header.className = 'detail-panel__header';
+    const title = document.createElement('h3');
+    title.className = 'detail-panel__title';
+    title.textContent = 'Información';
+    header.appendChild(title);
+
+    const body = document.createElement('div');
+    body.className = 'detail-panel__body';
+    body.innerHTML = `
+      <p class="detail-panel__eyebrow">Piso 1 · Cuerpo 9</p>
+      <p class="detail-panel__text">Aquí puedes mostrar información adicional, accesos o indicaciones para este espacio.</p>
+    `;
+
+    inner.appendChild(header);
+    inner.appendChild(body);
+    this.detailPanel.appendChild(inner);
+    this.detailPanel.addEventListener('click', (e) => e.stopPropagation());
+    this.detailPanelOverlay.addEventListener('click', () => this.closeDetailPanel());
+
+    document.body.appendChild(this.detailPanelOverlay);
+    document.body.appendChild(this.detailPanel);
+  }
+
+  private formatBodyPanelTitle(meshName: string): string {
+    const normalizedMeshName = meshName.replace(/\s+/g, '').toLowerCase();
+    const match = normalizedMeshName.match(/^cuerpo(\d+)$/i);
+    return match ? `Cuerpo ${match[1]}` : 'Información';
+  }
+
+  private openDetailPanel(title: string, content: string): void {
+    if (!this.detailPanelOverlay || !this.detailPanel) return;
+
+    const titleEl = this.detailPanel.querySelector('.detail-panel__title') as HTMLElement | null;
+    const bodyEl = this.detailPanel.querySelector('.detail-panel__body') as HTMLElement | null;
+    if (titleEl) titleEl.textContent = title;
+    if (bodyEl) bodyEl.innerHTML = content;
+
+    this.detailPanelOpen = true;
+    this.detailPanelOverlay.style.display = 'block';
+    this.detailPanelOverlay.classList.add('open');
+    this.detailPanel.classList.add('open');
+  }
+
+  private closeDetailPanel(): void {
+    this.detailPanelOpen = false;
+    if (this.detailPanelOverlay) {
+      this.detailPanelOverlay.style.display = 'none';
+      this.detailPanelOverlay.classList.remove('open');
+    }
+    if (this.detailPanel) {
+      this.detailPanel.classList.remove('open');
+    }
   }
 
   // ── Crea elementos del drawer (overlay + panel lateral) ─────────────────
@@ -421,6 +493,14 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (this.infoBox) {
       document.body.removeChild(this.infoBox);
       this.infoBox = null;
+    }
+    if (this.detailPanelOverlay) {
+      document.body.removeChild(this.detailPanelOverlay);
+      this.detailPanelOverlay = null;
+    }
+    if (this.detailPanel) {
+      document.body.removeChild(this.detailPanel);
+      this.detailPanel = null;
     }
     if (this.floorArrow) {
       document.body.removeChild(this.floorArrow);
@@ -814,6 +894,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     const normalizedMeshName = meshName?.replace(/\s+/g, '').toLowerCase();
     if (!normalizedMeshName) {
       return false;
+    }
+
+    if (this.currentBuilding === 'A' && this.currentFloor === this.firstFloorModel) {
+      return ['cuerpo21', 'cuerpo14'].includes(normalizedMeshName);
     }
 
     if (this.currentBuilding === 'A' && this.currentFloor === this.secondFloorModel) {
@@ -1344,8 +1428,42 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           const coords = pickResult.pickedPoint;
           console.log(`Clic en: ${target}, Coordenadas: (${coords?.x.toFixed(2)}, ${coords?.y.toFixed(2)}, ${coords?.z.toFixed(2)})`);
 
+          const normalizedMeshName = (pickResult.pickedMesh?.name || '').replace(/\s+/g, '').toLowerCase();
           const isFloorTrigger = pickResult.pickedMesh && this.isFloorSelectionTrigger(pickResult.pickedMesh.name);
-          if (isFloorTrigger) {
+          const excludedFirstFloorDetailBodies = ['cuerpo14', 'cuerpo21', 'cuerpo19', 'cuerpo25', 'cuerpo45'];
+          const excludedSecondFloorDetailBodies = ['cuerpo23', 'cuerpo8', 'cuerpo25', 'cuerpo30', 'cuerpo41'];
+          const isFirstFloorBodyDetailTrigger = this.currentBuilding === 'A' && this.currentFloor === this.firstFloorModel
+            && /^cuerpo/i.test(normalizedMeshName)
+            && !excludedFirstFloorDetailBodies.includes(normalizedMeshName);
+          const isSecondFloorBodyDetailTrigger = this.currentBuilding === 'A' && this.currentFloor === this.secondFloorModel
+            && /^cuerpo/i.test(normalizedMeshName)
+            && !excludedSecondFloorDetailBodies.includes(normalizedMeshName);
+
+          if (isFirstFloorBodyDetailTrigger) {
+            this.closeFloorDialog();
+            this.openDetailPanel(
+              this.formatBodyPanelTitle(normalizedMeshName),
+              `<div class="detail-panel__body-content">
+                <p class="detail-panel__eyebrow">Piso 1 · Acceso</p>
+                <p class="detail-panel__text">Este espacio puede mostrar información, indicaciones o accesos rápidos para ${this.formatBodyPanelTitle(normalizedMeshName)}.</p>
+              </div>`
+            );
+            if (this.infoBox) {
+              this.infoBox.style.display = 'none';
+            }
+          } else if (isSecondFloorBodyDetailTrigger) {
+            this.closeFloorDialog();
+            this.openDetailPanel(
+              this.formatBodyPanelTitle(normalizedMeshName),
+              `<div class="detail-panel__body-content">
+                <p class="detail-panel__eyebrow">Piso 2 · Acceso</p>
+                <p class="detail-panel__text">Este espacio puede mostrar información, indicaciones o accesos rápidos para ${this.formatBodyPanelTitle(normalizedMeshName)}.</p>
+              </div>`
+            );
+            if (this.infoBox) {
+              this.infoBox.style.display = 'none';
+            }
+          } else if (isFloorTrigger) {
             this.openFloorDialog();
             if (this.infoBox) {
               this.infoBox.style.display = 'none';

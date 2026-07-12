@@ -1432,12 +1432,20 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           const isFloorTrigger = pickResult.pickedMesh && this.isFloorSelectionTrigger(pickResult.pickedMesh.name);
           const excludedFirstFloorDetailBodies = ['cuerpo14', 'cuerpo21', 'cuerpo19', 'cuerpo25', 'cuerpo45'];
           const excludedSecondFloorDetailBodies = ['cuerpo23', 'cuerpo8', 'cuerpo25', 'cuerpo30', 'cuerpo41'];
-          const isFirstFloorBodyDetailTrigger = this.currentBuilding === 'A' && this.currentFloor === this.firstFloorModel
+          const excludedBuildingBFirstFloorDetailBodies = ['cuerpo0'];
+          const excludedBuildingBSecondFloorDetailBodies = ['cuerpo0'];
+          const excludedBuildingBThirdFloorDetailBodies = ['cuerpo0'];
+          const isFirstFloorBodyDetailTrigger = (this.currentFloor === this.firstFloorModel || this.currentFloor === this.buildingBFirstFloorModel)
             && /^cuerpo/i.test(normalizedMeshName)
-            && !excludedFirstFloorDetailBodies.includes(normalizedMeshName);
-          const isSecondFloorBodyDetailTrigger = this.currentBuilding === 'A' && this.currentFloor === this.secondFloorModel
+            && !excludedFirstFloorDetailBodies.includes(normalizedMeshName)
+            && !(this.currentFloor === this.buildingBFirstFloorModel && excludedBuildingBFirstFloorDetailBodies.includes(normalizedMeshName));
+          const isSecondFloorBodyDetailTrigger = (this.currentFloor === this.secondFloorModel || this.currentFloor === this.buildingBSecondFloorModel)
             && /^cuerpo/i.test(normalizedMeshName)
-            && !excludedSecondFloorDetailBodies.includes(normalizedMeshName);
+            && !excludedSecondFloorDetailBodies.includes(normalizedMeshName)
+            && !(this.currentFloor === this.buildingBSecondFloorModel && excludedBuildingBSecondFloorDetailBodies.includes(normalizedMeshName));
+          const isThirdFloorBodyDetailTrigger = (this.currentFloor === this.thirdFloorModel || this.currentFloor === this.buildingBThirdFloorModel)
+            && /^cuerpo/i.test(normalizedMeshName)
+            && !(this.currentFloor === this.buildingBThirdFloorModel && excludedBuildingBThirdFloorDetailBodies.includes(normalizedMeshName));
 
           if (isFirstFloorBodyDetailTrigger) {
             this.closeFloorDialog();
@@ -1457,6 +1465,18 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
               this.formatBodyPanelTitle(normalizedMeshName),
               `<div class="detail-panel__body-content">
                 <p class="detail-panel__eyebrow">Piso 2 · Acceso</p>
+                <p class="detail-panel__text">Este espacio puede mostrar información, indicaciones o accesos rápidos para ${this.formatBodyPanelTitle(normalizedMeshName)}.</p>
+              </div>`
+            );
+            if (this.infoBox) {
+              this.infoBox.style.display = 'none';
+            }
+          } else if (isThirdFloorBodyDetailTrigger) {
+            this.closeFloorDialog();
+            this.openDetailPanel(
+              this.formatBodyPanelTitle(normalizedMeshName),
+              `<div class="detail-panel__body-content">
+                <p class="detail-panel__eyebrow">Piso 3 · Acceso</p>
                 <p class="detail-panel__text">Este espacio puede mostrar información, indicaciones o accesos rápidos para ${this.formatBodyPanelTitle(normalizedMeshName)}.</p>
               </div>`
             );

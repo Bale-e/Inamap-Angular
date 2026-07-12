@@ -20,7 +20,7 @@
     "@angular/router": "^17.3.0",
     "babylonjs-loaders": "^7.54.3",
     "express": "^5.2.1",
-    "firebase": "^12.13.0",
+    "firebase": "^12.16.0",
     "firebase-admin": "^13.9.0",
     "rxjs": "~7.8.0",
     "three": "^0.185.0",

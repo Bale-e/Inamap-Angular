@@ -705,7 +705,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private async searchDestination(destination: string): Promise<void> {
-  const locations = await this.firebaseService.getLocaciones("m0riTcScQk6A4SlXTy1E");
+  const locations = await this.firebaseService.getLocacionesDeTodosLosEdificios();
   const normalizedSearch = destination.trim().toLowerCase();
   const location = locations.find((loc: any) => {
     const nameValue = (loc.Nombre || loc.nombre || loc.name || '').toString().trim().toLowerCase();
@@ -741,24 +741,25 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private async loadLocationOptions(): Promise<void> {
-    try {
-      const locations = await this.firebaseService.getLocaciones("m0riTcScQk6A4SlXTy1E");
-      const options = locations
-        .map((loc: any) => {
-          const name = (loc.Nombre || loc.nombre || loc.name || loc.DisplayName || loc.displayName || loc.id || '').toString().trim();
-          return name || loc.id || '';
-        })
-        .filter((name: string) => name.length > 0);
+  try {
+    const locations = await this.firebaseService.getLocacionesDeTodosLosEdificios();
+    console.log('loadLocationOptions - locaciones recibidas:', locations);
+    const options = locations
+      .map((loc: any) => {
+        const name = (loc.Nombre || loc.nombre || loc.name || loc.DisplayName || loc.displayName || loc.id || '').toString().trim();
+        return name || loc.id || '';
+      })
+      .filter((name: string) => name.length > 0);
 
-      if (options.length > 0) {
-        this.destinationOptions = Array.from(new Set(options));
-        this.filteredDestinations = [...this.destinationOptions];
-        this.cd.detectChanges();
-      }
-    } catch (error) {
-      console.error('No se pudieron cargar las locaciones desde Firebase:', error);
+    if (options.length > 0) {
+      this.destinationOptions = Array.from(new Set(options));
+      this.filteredDestinations = [...this.destinationOptions];
+      this.cd.detectChanges();
     }
+  } catch (error) {
+    console.error('No se pudieron cargar las locaciones desde Firebase:', error);
   }
+}
 
   private updateSceneAppearance(): void {
     if (!this.scene) return;

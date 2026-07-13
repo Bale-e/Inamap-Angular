@@ -64,8 +64,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private servicesList: string[] = ['Cafetería', 'Biblioteca', 'Recepción', 'Baños', 'Sala de Profesores', 'Soporte Técnico', 'Tienda'];
   floorDialogVisible = false;
   searchQuery = '';
-  destinationOptions: string[] = ['Fotocopiadora', 'Sala de Tutorías 1', 'Sala de Tutorías 2', 'Sala de Tutorías 3', 'Sala de Tutorías 4', 'Ascensor'];
-  filteredDestinations: string[] = [...this.destinationOptions];
+  destinationOptions: string[] = [];
+  filteredDestinations: string[] = [];
   selectedDestination: string | null = null;
 
   private onDocumentClick = (evt: MouseEvent): void => {
@@ -704,11 +704,37 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.updateBannerButtons();
   }
 
+  private extractLocationName(location: any): string {
+    const candidates = [
+      location?.Nombre,
+      location?.nombre,
+      location?.name,
+      location?.DisplayName,
+      location?.displayName,
+      location?.title,
+      location?.titulo,
+      location?.id
+    ];
+
+    for (const candidate of candidates) {
+      if (candidate === undefined || candidate === null) {
+        continue;
+      }
+
+      const value = candidate.toString().trim();
+      if (value.length > 0) {
+        return value;
+      }
+    }
+
+    return '';
+  }
+
   private async searchDestination(destination: string): Promise<void> {
   const locations = await this.firebaseService.getLocacionesDeTodosLosEdificios();
   const normalizedSearch = destination.trim().toLowerCase();
   const location = locations.find((loc: any) => {
-    const nameValue = (loc.Nombre || loc.nombre || loc.name || '').toString().trim().toLowerCase();
+    const nameValue = this.extractLocationName(loc).trim().toLowerCase();
     return nameValue === normalizedSearch;
   });
 
@@ -745,17 +771,13 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     const locations = await this.firebaseService.getLocacionesDeTodosLosEdificios();
     console.log('loadLocationOptions - locaciones recibidas:', locations);
     const options = locations
-      .map((loc: any) => {
-        const name = (loc.Nombre || loc.nombre || loc.name || loc.DisplayName || loc.displayName || loc.id || '').toString().trim();
-        return name || loc.id || '';
-      })
+      .map((loc: any) => this.extractLocationName(loc))
       .filter((name: string) => name.length > 0);
 
-    if (options.length > 0) {
-      this.destinationOptions = Array.from(new Set(options));
-      this.filteredDestinations = [...this.destinationOptions];
-      this.cd.detectChanges();
-    }
+    this.destinationOptions = Array.from(new Set(options));
+    this.filteredDestinations = [...this.destinationOptions];
+    this.handleSearchInput(this.searchQuery);
+    this.cd.detectChanges();
   } catch (error) {
     console.error('No se pudieron cargar las locaciones desde Firebase:', error);
   }

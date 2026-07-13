@@ -16,6 +16,39 @@ describe('Map3dContainerComponent search autocomplete', () => {
     expect(component.searchQuery).toBe('tut');
     expect(component.filteredDestinations).toEqual(['Sala de Tutorías 1']);
   });
+
+  it('should populate search suggestions from Firestore location names', async () => {
+    const firebaseService = {
+      getLocacionesDeTodosLosEdificios: async () => [
+        { Nombre: 'Biblioteca' },
+        { nombre: 'Sala de Tutorías 1' }
+      ]
+    } as unknown as Firebase;
+
+    const component = new Map3dContainerComponent(
+      firebaseService,
+      { run: (fn: () => unknown) => fn() } as NgZone,
+      { detectChanges: () => undefined } as ChangeDetectorRef
+    );
+
+    const suggestionsPanel = {
+      style: { display: 'none' },
+      innerHTML: '',
+      querySelectorAll: () => [],
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined
+    } as unknown as HTMLDivElement;
+
+    (component as any).searchInputElement = { parentElement: { appendChild: () => undefined } } as HTMLInputElement;
+    (component as any).searchSuggestionsPanel = suggestionsPanel;
+    (component as any).searchQuery = 'b';
+
+    await (component as any).loadLocationOptions();
+
+    expect(component.destinationOptions).toEqual(['Biblioteca', 'Sala de Tutorías 1']);
+    expect(component.filteredDestinations).toEqual(['Biblioteca', 'Sala de Tutorías 1']);
+    expect(suggestionsPanel.innerHTML).toContain('Biblioteca');
+  });
 });
 
 describe('Map3dContainerComponent building A transition marker', () => {

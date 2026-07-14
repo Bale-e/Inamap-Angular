@@ -103,7 +103,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     canvas.className = 'babylon-canvas';
     canvas.style.width = '100%';
     canvas.style.height = '100%';
-    //canvas.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+    }, { passive: false });
 
     canvasContainer.innerHTML = '';
     canvasContainer.appendChild(canvas);
@@ -115,8 +117,6 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     // ✅ CAMBIO: target temporal en Zero(), se actualizará tras cargar el modelo
     this.camera = new BABYLON.ArcRotateCamera('camera', -Math.PI / 2, Math.PI / 3, 20, BABYLON.Vector3.Zero(), this.scene);
     this.camera.attachControl(canvas, false);
-    this.camera.inputs.attached.mousewheel?.attachControl();
-    this.camera.wheelDeltaPercentage = 0.02;
     this.camera.wheelDeltaPercentage = 0.01;
     this.camera.lowerRadiusLimit = 2;
     this.camera.upperRadiusLimit = 300;

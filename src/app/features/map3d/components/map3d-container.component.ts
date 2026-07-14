@@ -1081,13 +1081,15 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     canvas.style.width = '100%';
     canvas.style.height = '100%';
 
-    // Evitar que la rueda del ratón haga scroll en la página cuando el cursor está sobre el canvas
-    const wheelHandler = (e: WheelEvent) => { e.preventDefault(); e.stopPropagation(); };
-    // Prevención local sobre el canvas
-    canvas.addEventListener('wheel', (e) => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
-    // Añadir/remover captura global cuando el ratón entra/sale del canvas para bloquear desplazamiento de la página
-    canvas.addEventListener('mouseenter', () => document.addEventListener('wheel', wheelHandler, { passive: false, capture: true }));
-    canvas.addEventListener('mouseleave', () => document.removeEventListener('wheel', wheelHandler, { capture: true }));
+    // Evitar que la rueda del ratón haga scroll en la página, y usarla para hacer zoom real (orthoSize)
+    canvas.addEventListener('wheel', (e: WheelEvent) => {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        this.zoomIn();
+      } else if (e.deltaY > 0) {
+        this.zoomOut();
+      }
+    }, { passive: false });
 
     canvasContainer.innerHTML = '';
     canvasContainer.appendChild(canvas);
@@ -1106,7 +1108,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
     this.camera = new BABYLON.ArcRotateCamera('camera', initialAlpha, initialBeta, initialRadius, BABYLON.Vector3.Zero(), this.scene);
     this.camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
-    this.camera.attachControl(canvas, true, false);
+    this.camera.attachControl(canvas, false, false);
     this.camera.wheelDeltaPercentage = 0.01;
     // permitir acercarse más (valor mínimo reducido) para respetar el zoom inicial
     this.camera.lowerRadiusLimit = 2;
@@ -1814,4 +1816,4 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 }
 
-}  
+}

@@ -51,6 +51,31 @@ describe('Map3dContainerComponent search autocomplete', () => {
   });
 });
 
+describe('Map3dContainerComponent viewport wheel handling', () => {
+  it('should only prevent page scroll while the pointer is over the 3D viewport', () => {
+    const component = new Map3dContainerComponent(
+      {} as Firebase,
+      { run: (fn: () => unknown) => fn() } as NgZone,
+      { detectChanges: () => undefined } as ChangeDetectorRef
+    );
+
+    const event = new Event('wheel', { cancelable: true }) as WheelEvent;
+    const preventDefaultSpy = spyOn(event, 'preventDefault');
+    const stopPropagationSpy = spyOn(event, 'stopPropagation');
+
+    (component as any).handleViewportWheel(event);
+
+    expect(preventDefaultSpy).not.toHaveBeenCalled();
+    expect(stopPropagationSpy).not.toHaveBeenCalled();
+
+    (component as any).setViewportHoverState(true);
+    (component as any).handleViewportWheel(event);
+
+    expect(preventDefaultSpy).toHaveBeenCalled();
+    expect(stopPropagationSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe('Map3dContainerComponent building A transition marker', () => {
   it('should return the expected marker data for each building B floor', () => {
     const component = new Map3dContainerComponent(

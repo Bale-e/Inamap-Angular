@@ -1815,5 +1815,4 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.pathMeshes.push(...dibujarFlechaGuia(this.scene, from, to));
   }
 }
-
 }

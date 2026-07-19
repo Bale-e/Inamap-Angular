@@ -20,43 +20,24 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-console.log('Firebase inicializado:', app.name);
 const db = getFirestore(app);
 
 const knownCollections = ['Edificios', 'navigation-paths', 'rutas'];
-let hasLoggedCollections = false;
-const loggedCollectionIds = new Set<string>();
 const collectionResultsCache = new Map<string, any[]>();
 
-function logCollectionOnce(collectionId: string, results: any[]) {
-  if (loggedCollectionIds.has(collectionId)) {
-    return;
-  }
-  loggedCollectionIds.add(collectionId);
-  console.log('Colección disponible:', collectionId, `(${results.length} documentos)`);
-  if (results.length > 0) {
-    console.log('Documentos:', results);
-  }
-}
-
-async function logAvailableCollections() {
-  if (hasLoggedCollections) {
-    return;
-  }
-  hasLoggedCollections = true;
+async function prefetchCollections(): Promise<void> {
   try {
     for (const collectionId of knownCollections) {
       const snapshot = await getDocs(collection(db, collectionId));
       const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       collectionResultsCache.set(collectionId, results);
-      logCollectionOnce(collectionId, results);
     }
   } catch (error) {
-    console.error('No se pudieron obtener las colecciones de Firestore:', error);
+    // no logging to avoid console noise in production
   }
 }
 
-void logAvailableCollections();
+void prefetchCollections();
 
 // ── Búsqueda de campos sin distinguir mayúsculas/minúsculas ──────────────
 // Algunos documentos en Firebase quedaron con el campo como "Piso" y otros
@@ -64,7 +45,7 @@ void logAvailableCollections();
 function getFieldCI(obj: any, fieldName: string): any {
   if (!obj) return undefined;
   const regex = new RegExp(`^${fieldName}$`, 'i');
-  const key = Object.keys(obj).find(k => regex.test(k));
+  const key = Object.keys(obj).find(k => regex.test(k?.toString().trim()));
   return key !== undefined ? obj[key] : undefined;
 }
 
@@ -83,7 +64,7 @@ export class Firebase {
   ];
 
   constructor() {
-    void logAvailableCollections();
+    // No logging de colecciones para evitar ruido en consola.
   }
 
   private async fetchCollectionResults(collectionPath: string) {
@@ -95,7 +76,6 @@ export class Firebase {
     const snapshot = await getDocs(collection(db, collectionPath));
     const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     collectionResultsCache.set(collectionPath, results);
-    logCollectionOnce(collectionPath, results);
     return results;
   }
 
@@ -113,7 +93,6 @@ export class Firebase {
       allResults.push(...results);
     }
 
-    console.log(`Firebase getLocaciones ${edificioId}:`, { count: allResults.length, results: allResults });
     return allResults;
   }
 
@@ -137,7 +116,6 @@ async getLocacionesDeTodosLosEdificios() {
     });
   }
 
-  console.log('Locaciones de todos los edificios:', { count: allResults.length, results: allResults });
   return allResults;
 }
 
@@ -150,7 +128,6 @@ async getLocacionesDeTodosLosEdificios() {
       return (pisoValor ?? '').toString().trim().toLowerCase() === pisoNormalizado;
     });
 
-    console.log(`Firebase getLocacionesPorPiso ${edificioId} / ${piso}:`, { count: results.length, results });
     return results;
   }
 
@@ -168,13 +145,22 @@ async getLocacionesDeTodosLosEdificios() {
     return this.fetchCollectionResults('navigation-paths');
   }
 
+  private normalizeFloorKey(piso: string): string {
+    const normalized = piso.toString().trim().toLowerCase().replace(/\s+/g, '');
+    if (/^\d+$/.test(normalized)) {
+      return `piso${normalized}`;
+    }
+    return normalized;
+  }
+
   async getNavigationPath(piso: string) {
     const todas = await this.getNavigationPaths();
-    const pisoNormalizado = piso.trim().toLowerCase();
+    const pisoNormalizado = this.normalizeFloorKey(piso);
 
     return todas.find((doc: any) => {
-      const pisoValor = getFieldCI(doc, 'piso');
-      return (pisoValor ?? '').toString().trim().toLowerCase() === pisoNormalizado;
+      const pisoValor = getFieldCI(doc, 'Piso') ?? getFieldCI(doc, 'Piso ');
+      const normalizedPiso = this.normalizeFloorKey((pisoValor ?? '').toString());
+      return normalizedPiso === pisoNormalizado;
     }) ?? null;
   }
 

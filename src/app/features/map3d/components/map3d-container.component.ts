@@ -67,6 +67,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   destinationOptions: string[] = [];
   filteredDestinations: string[] = [];
   selectedDestination: string | null = null;
+  public destinationCoordinatesText = '';
+  private destinationMarker: BABYLON.Mesh | null = null;
 
   private onDocumentClick = (evt: MouseEvent): void => {
     const target = evt.target as Node | null;
@@ -255,7 +257,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     });
     this.mainMapMarker.addEventListener('click', (e) => {
       e.stopPropagation();
-      console.log('Mapa principal pendiente de implementar');
+      // Intención futura: navegar al mapa principal si está implementado.
     });
     document.body.appendChild(this.mainMapMarker);
   }
@@ -373,7 +375,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
         const btn = document.createElement('button');
         btn.className = 'drawer-item';
         btn.textContent = s;
-        btn.addEventListener('click', (e) => { e.stopPropagation(); console.log('Servicio seleccionado:', s); });
+        btn.addEventListener('click', (e) => { e.stopPropagation(); });
         servicesListEl.appendChild(btn);
       });
     };
@@ -483,8 +485,6 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private ensureLoaders(): void {
     if (!BABYLON.SceneLoader.IsPluginForExtensionAvailable('.obj')) {
       console.warn('OBJ loader no está disponible');
-    } else {
-      console.log('✅ OBJ Loader disponible');
     }
   }
 
@@ -573,11 +573,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
   private attachBannerControls(): void {
     if (this.bannerControlsAttached) return;
-    const view2DBtn = document.getElementById('view2DBtn');
-    const view3DBtn = document.getElementById('view3DBtn');
     const searchPlaceInput = document.getElementById('searchPlaceInput') as HTMLInputElement | null;
-    if (view2DBtn) view2DBtn.addEventListener('click', () => this.ngZone.run(() => this.setView('2d')));
-    if (view3DBtn) view3DBtn.addEventListener('click', () => this.ngZone.run(() => this.setView('3d')));
     if (searchPlaceInput) {
       this.searchInputElement = searchPlaceInput;
       this.createSearchSuggestionsPanel();
@@ -611,11 +607,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private updateBannerButtons(): void {
-    const view2DBtn = document.getElementById('view2DBtn') as HTMLButtonElement | null;
-    const view3DBtn = document.getElementById('view3DBtn') as HTMLButtonElement | null;
     const searchPlaceInput = document.getElementById('searchPlaceInput') as HTMLInputElement | null;
-    if (view2DBtn) view2DBtn.disabled = this.viewMode === '2d';
-    if (view3DBtn) view3DBtn.disabled = this.viewMode === '3d';
     if (searchPlaceInput) {
       searchPlaceInput.disabled = false;
       searchPlaceInput.placeholder = this.destinationOptions.length > 0 ? 'Buscar destino' : 'Cargando ubicaciones...';
@@ -625,9 +617,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
   handleSearchInput(query: string): void {
     this.searchQuery = query;
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalizedQuery = this.normalizeText(query);
     this.filteredDestinations = this.destinationOptions.filter(option =>
-      option.toLowerCase().includes(normalizedQuery)
+      this.normalizeText(option).includes(normalizedQuery)
     );
     this.renderSearchSuggestions();
   }
@@ -706,14 +698,14 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
   private extractLocationName(location: any): string {
     const candidates = [
-      location?.Nombre,
-      location?.nombre,
-      location?.name,
-      location?.DisplayName,
-      location?.displayName,
-      location?.title,
-      location?.titulo,
-      location?.id
+      this.getObjectFieldIgnoreCase(location, 'Nombre'),
+      this.getObjectFieldIgnoreCase(location, 'nombre'),
+      this.getObjectFieldIgnoreCase(location, 'name'),
+      this.getObjectFieldIgnoreCase(location, 'DisplayName'),
+      this.getObjectFieldIgnoreCase(location, 'displayName'),
+      this.getObjectFieldIgnoreCase(location, 'title'),
+      this.getObjectFieldIgnoreCase(location, 'titulo'),
+      this.getObjectFieldIgnoreCase(location, 'id')
     ];
 
     for (const candidate of candidates) {
@@ -727,61 +719,250 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       }
     }
 
+    // Fallback: cualquier campo string que no sea metadata de colección.
+    const ignoredKeys = new Set([
+      '_coleccion',
+      'coleccion',
+      '_edificioid',
+      '_edificionombre',
+      'edificio',
+      'coordenadas',
+      'coordenadas 3d',
+      'coordinates',
+      'coords',
+      'coordenada',
+      'x',
+      'y',
+      'z',
+      'piso',
+      'tipo',
+      'descripcion',
+      'descripción'
+    ]);
+
+    for (const key of Object.keys(location || {})) {
+      const normalizedKey = key?.toString().trim().toLowerCase();
+      if (!normalizedKey || ignoredKeys.has(normalizedKey)) {
+        continue;
+      }
+
+      const candidate = location[key];
+      if (typeof candidate === 'string') {
+        const value = candidate.trim();
+        if (value.length > 0) {
+          return value;
+        }
+      }
+    }
+
     return '';
   }
 
-  private async searchDestination(destination: string): Promise<void> {
-  const locations = await this.firebaseService.getLocacionesDeTodosLosEdificios();
-  const normalizedSearch = destination.trim().toLowerCase();
-  const location = locations.find((loc: any) => {
-    const nameValue = this.extractLocationName(loc).trim().toLowerCase();
-    return nameValue === normalizedSearch;
-  });
+  private normalizeText(text: any): string {
+    if (text === undefined || text === null) {
+      return '';
+    }
 
-  const coordinate = this.extractCoordinateFromLocation(location);
-  this.clearPath();
-  this.clearMarkers();
-
-  if (coordinate) {
-    const ruta = await this.buildRoute(coordinate);
-    this.drawRoute(ruta);
-    return;
+    return text.toString()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .toLowerCase();
   }
 
-  console.warn(`No se encontró coordenada para destino: ${destination}`);
-}
+  private getObjectFieldIgnoreCase(obj: any, fieldName: string): any {
+    if (!obj || typeof obj !== 'object') return undefined;
+    const target = fieldName?.toString().trim().toLowerCase();
+    const key = Object.keys(obj).find(k => k?.toString().trim().toLowerCase() === target);
+    return key ? obj[key] : undefined;
+  }
+
+  private getCurrentFloorName(): string {
+    const normalized = this.currentFloor.toLowerCase();
+    if (normalized.includes('piso 1')) {
+      return 'Piso 1';
+    }
+    if (normalized.includes('piso 2')) {
+      return 'Piso 2';
+    }
+    if (normalized.includes('piso 3')) {
+      return 'Piso 3';
+    }
+    return 'Piso 1';
+  }
+
+  private matchLocationBuilding(location: any, building: 'A' | 'B'): boolean {
+    const edificioField = this.getObjectFieldIgnoreCase(location, '_edificioNombre') ||
+                         this.getObjectFieldIgnoreCase(location, 'edificio') ||
+                         this.getObjectFieldIgnoreCase(location, 'building') ||
+                         this.getObjectFieldIgnoreCase(location, '_edificioId');
+    const edificioValue = (edificioField ?? '').toString().trim().toLowerCase();
+    const target = `edificio ${building.toLowerCase()}`;
+    return edificioValue === building.toLowerCase() || edificioValue === target || edificioValue.includes(target);
+  }
+
+  private getLocationFloor(location: any): string {
+    const pisoField = this.getObjectFieldIgnoreCase(location, 'piso') ||
+                      this.getObjectFieldIgnoreCase(location, 'Piso');
+    const pisoValue = (pisoField ?? '').toString().trim();
+    if (pisoValue.length === 0) {
+      return 'Piso desconocido';
+    }
+    return pisoValue;
+  }
+
+  private getLocationBuildingText(location: any): string {
+    const edificioField = this.getObjectFieldIgnoreCase(location, '_edificioNombre') ||
+                         this.getObjectFieldIgnoreCase(location, 'edificio') ||
+                         this.getObjectFieldIgnoreCase(location, 'building') ||
+                         this.getObjectFieldIgnoreCase(location, '_edificioId');
+    const edificioValue = (edificioField ?? '').toString().trim();
+    return edificioValue.length > 0 ? edificioValue : 'Edificio desconocido';
+  }
+
+  private getLocationSearchValues(location: any): string[] {
+    const candidates: string[] = [];
+    const name = this.extractLocationName(location);
+    if (name) {
+      candidates.push(name);
+    }
+
+    const extraFields = [
+      this.getObjectFieldIgnoreCase(location, 'Nombre'),
+      this.getObjectFieldIgnoreCase(location, 'nombre'),
+      this.getObjectFieldIgnoreCase(location, 'name'),
+      this.getObjectFieldIgnoreCase(location, 'DisplayName'),
+      this.getObjectFieldIgnoreCase(location, 'displayName'),
+      this.getObjectFieldIgnoreCase(location, 'title'),
+      this.getObjectFieldIgnoreCase(location, 'titulo'),
+      this.getObjectFieldIgnoreCase(location, 'id'),
+      this.getObjectFieldIgnoreCase(location, '_id'),
+      this.getObjectFieldIgnoreCase(location, '_edificioNombre'),
+      this.getObjectFieldIgnoreCase(location, 'edificio')
+    ];
+
+    for (const field of extraFields) {
+      if (field && typeof field === 'string') {
+        candidates.push(field.trim());
+      }
+    }
+
+    for (const value of Object.values(location || {})) {
+      if (typeof value === 'string') {
+        candidates.push(value.trim());
+      }
+    }
+
+    return Array.from(new Set(candidates.filter(v => v.length > 0)));
+  }
+
+  private async searchDestination(destination: string): Promise<void> {
+    const locations = await this.firebaseService.getLocacionesDeTodosLosEdificios();
+    const normalizedSearch = this.normalizeText(destination);
+    const targetBuilding = this.currentBuilding;
+
+    const matches = locations.filter((loc: any) => {
+      const searchValues = this.getLocationSearchValues(loc).map(v => this.normalizeText(v));
+      return searchValues.some(value =>
+        value === normalizedSearch ||
+        value.includes(normalizedSearch) ||
+        normalizedSearch.includes(value)
+      );
+    });
+
+    const preferred = matches.find((loc: any) => this.matchLocationBuilding(loc, targetBuilding));
+    const location = preferred || matches[0] || null;
+
+    const coordinate = this.extractCoordinateFromLocation(location);
+    this.clearPath();
+    this.clearMarkers();
+
+    if (coordinate) {
+      const locationBuilding = this.getLocationBuildingText(location);
+      const locationFloor = this.getLocationFloor(location);
+      const coordsText = `Coordenadas 3D: (${coordinate.x.toFixed(2)}, ${coordinate.y.toFixed(2)}, ${coordinate.z.toFixed(2)})`;
+      this.destinationCoordinatesText = `${destination} — ${locationBuilding} / ${locationFloor}: ${coordsText}`;
+      this.showDestinationMarker(coordinate);
+      const ruta = await this.buildRoute(coordinate, locationFloor);
+      this.drawRoute(ruta);
+      return;
+    }
+
+    this.destinationCoordinatesText = `No se encontró la locación '${destination}'.`;
+    console.warn(`No se encontró coordenada para destino: ${destination}`);
+  }
+
+  private showDestinationMarker(coordinate: BABYLON.Vector3): void {
+    if (!this.scene) return;
+    this.clearDestinationMarker();
+
+    try {
+      const marker = BABYLON.MeshBuilder.CreateSphere('destinationMarker', { diameter: 0.35 }, this.scene);
+      marker.position = coordinate.clone();
+      marker.isPickable = false;
+      marker.renderingGroupId = 1;
+
+      const material = new BABYLON.StandardMaterial('destinationMarkerMat', this.scene);
+      material.diffuseColor = new BABYLON.Color3(0.05, 0.75, 0.95);
+      material.emissiveColor = new BABYLON.Color3(0.2, 0.95, 1);
+      material.alpha = 0.9;
+      marker.material = material;
+
+      this.destinationMarker = marker;
+    } catch (error) {
+      console.warn('No se pudo crear el marcador de destino:', error);
+    }
+  }
 
   private extractCoordinateFromLocation(location: any): BABYLON.Vector3 | null {
     if (!location) return null;
-    const coord = location.Coordenadas || location.coordenadas || location.coords || location.coordinates || location.coordenada;
+
+    const coord = this.getObjectFieldIgnoreCase(location, 'Coordenadas3D') ||
+                  this.getObjectFieldIgnoreCase(location, 'Coordenadas 3D') ||
+                  this.getObjectFieldIgnoreCase(location, 'Coordenadas') ||
+                  this.getObjectFieldIgnoreCase(location, 'coordenadas') ||
+                  this.getObjectFieldIgnoreCase(location, 'coordinates') ||
+                  this.getObjectFieldIgnoreCase(location, 'coords') ||
+                  this.getObjectFieldIgnoreCase(location, 'coordenada');
+
     if (Array.isArray(coord) && coord.length >= 3 && coord.every((v: any) => typeof v === 'number')) {
       return new BABYLON.Vector3(coord[0], coord[1], coord[2]);
     }
-    if (coord && typeof coord === 'object' && coord.x != null && coord.y != null && coord.z != null) {
-      return new BABYLON.Vector3(coord.x, coord.y, coord.z);
+
+    if (coord && typeof coord === 'object') {
+      const x = this.getObjectFieldIgnoreCase(coord, 'x');
+      const y = this.getObjectFieldIgnoreCase(coord, 'y');
+      const z = this.getObjectFieldIgnoreCase(coord, 'z');
+      if (x != null && y != null && z != null && [x, y, z].every((v: any) => typeof v === 'number')) {
+        return new BABYLON.Vector3(x, y, z);
+      }
     }
-    if (location.x != null && location.y != null && location.z != null) {
-      return new BABYLON.Vector3(location.x, location.y, location.z);
+
+    const x = this.getObjectFieldIgnoreCase(location, 'x');
+    const y = this.getObjectFieldIgnoreCase(location, 'y');
+    const z = this.getObjectFieldIgnoreCase(location, 'z');
+    if (x != null && y != null && z != null && [x, y, z].every((v: any) => typeof v === 'number')) {
+      return new BABYLON.Vector3(x, y, z);
     }
+
     return null;
   }
 
   private async loadLocationOptions(): Promise<void> {
-  try {
-    const locations = await this.firebaseService.getLocacionesDeTodosLosEdificios();
-    console.log('loadLocationOptions - locaciones recibidas:', locations);
-    const options = locations
-      .map((loc: any) => this.extractLocationName(loc))
-      .filter((name: string) => name.length > 0);
+    try {
+      const locations = await this.firebaseService.getLocacionesDeTodosLosEdificios();
+      const options = locations
+        .map((loc: any) => this.extractLocationName(loc))
+        .filter((name: string) => name.length > 0);
 
-    this.destinationOptions = Array.from(new Set(options));
-    this.filteredDestinations = [...this.destinationOptions];
-    this.handleSearchInput(this.searchQuery);
-    this.cd.detectChanges();
-  } catch (error) {
-    console.error('No se pudieron cargar las locaciones desde Firebase:', error);
+      this.destinationOptions = Array.from(new Set(options));
+      this.filteredDestinations = [...this.destinationOptions];
+      this.handleSearchInput(this.searchQuery);
+      this.cd.detectChanges();
+    } catch (error) {
+      console.error('No se pudieron cargar las locaciones desde Firebase:', error);
+    }
   }
-}
 
   private updateSceneAppearance(): void {
     if (!this.scene) return;
@@ -1448,12 +1629,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
         if (pickResult?.hit) {
           const meshName = pickResult.pickedMesh ? pickResult.pickedMesh.name || 'cuerpo' : 'suelo';
-          const isBoundary = this.boundaryNameRegExp.test(meshName);
-          const target = isBoundary ? `${meshName} (límite)` : meshName;
-          const coords = pickResult.pickedPoint;
-          console.log(`Clic en: ${target}, Coordenadas: (${coords?.x.toFixed(2)}, ${coords?.y.toFixed(2)}, ${coords?.z.toFixed(2)})`);
-
-          const normalizedMeshName = (pickResult.pickedMesh?.name || '').replace(/\s+/g, '').toLowerCase();
+          const normalizedMeshName = (meshName || '').replace(/\s+/g, '').toLowerCase();
           const isFloorTrigger = pickResult.pickedMesh && this.isFloorSelectionTrigger(pickResult.pickedMesh.name);
           const excludedFirstFloorDetailBodies = ['cuerpo14', 'cuerpo21', 'cuerpo19', 'cuerpo25', 'cuerpo45'];
           const excludedSecondFloorDetailBodies = ['cuerpo23', 'cuerpo8', 'cuerpo25', 'cuerpo30', 'cuerpo41'];
@@ -1607,8 +1783,20 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   // --- Utilities para demo de selección y marcadores ---
+  private clearDestinationMarker(): void {
+    if (!this.scene || !this.destinationMarker) return;
+
+    try {
+      this.destinationMarker.dispose();
+    } catch (_) {
+      // ignore disposal errors
+    }
+
+    this.destinationMarker = null;
+  }
+
   private clearMarkers(): void {
-    // Eliminado sistema de marcadores por selección de clic. Actualmente solo se limpian trazados.
+    this.clearDestinationMarker();
   }
 
   private updateBuildingBMarkerPosition(canvas: HTMLCanvasElement): void {
@@ -1775,36 +1963,89 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private async buildRoute(destino: { x: number, y: number, z: number }): Promise<{ x: number, y: number, z: number }[]> {
-    const navPath = await this.firebaseService.getNavigationPath('Piso 1');
-
+  private async buildRoute(destino: { x: number, y: number, z: number }, piso: string): Promise<{ x: number, y: number, z: number }[]> {
+    const navPath = await this.firebaseService.getNavigationPath(piso);
     const puntos: { x: number, y: number, z: number }[] = [this.mainEntranceAccess];
 
-    if (navPath?.['Giros']?.length) {
-      let giroMasCercano = navPath['Giros'][0];
-      let menorDistancia = this.distancia(giroMasCercano['Coordenadas 3D'], destino);
-
-      navPath['Giros'].forEach((giro: any) => {
-        const d = this.distancia(giro['Coordenadas 3D'], destino);
-        if (d < menorDistancia) {
-          menorDistancia = d;
-          giroMasCercano = giro;
-        }
-      });
-
-      puntos.push(giroMasCercano['Coordenadas 3D']);
+    const pathPoints = this.extractNavigationPathCoordinates(navPath);
+    if (pathPoints.length > 0) {
+      puntos.push(...pathPoints);
     }
 
     puntos.push(destino);
     return puntos;
   }
 
-  private distancia(a: { x: number, y: number, z: number }, b: { x: number, y: number, z: number }): number {
-    return Math.sqrt(
-      Math.pow(a.x - b.x, 2) +
-      Math.pow(a.y - b.y, 2) +
-      Math.pow(a.z - b.z, 2)
-    );
+  private extractNavigationPathCoordinates(navPath: any): { x: number, y: number, z: number }[] {
+    if (!navPath || typeof navPath !== 'object') {
+      return [];
+    }
+
+    const coordinates: { x: number, y: number, z: number }[] = [];
+    const addPoint = (point: any) => {
+      const coordinate = this.extractCoordinateFromLocation(point);
+      if (coordinate) {
+        coordinates.push({ x: coordinate.x, y: coordinate.y, z: coordinate.z });
+      }
+    };
+
+    const parsePointCandidate = (candidate: any) => {
+      if (!candidate || typeof candidate !== 'object') {
+        return;
+      }
+
+      if (candidate['Coordenadas3D'] || candidate['Coordenadas 3D']) {
+        addPoint(candidate['Coordenadas3D'] ?? candidate['Coordenadas 3D']);
+        return;
+      }
+
+      if (candidate['Coordenadas'] || candidate['coordinates'] || candidate['coords']) {
+        addPoint(candidate['Coordenadas'] ?? candidate['coordinates'] ?? candidate['coords']);
+        return;
+      }
+
+      if (Object.keys(candidate).some(key => /coordenadas?/i.test(key))) {
+        addPoint(candidate);
+        return;
+      }
+
+      Object.values(candidate).forEach(value => addPoint(value));
+    };
+
+    if (Array.isArray(navPath.Accesos) || typeof navPath.Accesos === 'object') {
+      const accesos = navPath.Accesos;
+      if (Array.isArray(accesos)) {
+        accesos.forEach((item: any) => parsePointCandidate(item));
+      } else {
+        Object.values(accesos).forEach((item: any) => parsePointCandidate(item));
+      }
+    }
+
+    if (Array.isArray(navPath.Conexiones)) {
+      navPath.Conexiones.forEach((item: any) => parsePointCandidate(item));
+    }
+
+    if (Array.isArray(navPath.Giros)) {
+      navPath.Giros.forEach((giro: any) => parsePointCandidate(giro));
+    }
+
+    if (Array.isArray(navPath.Turns) || Array.isArray(navPath.turns)) {
+      const turns = navPath.Turns ?? navPath.turns;
+      turns.forEach((turn: any) => parsePointCandidate(turn));
+    }
+
+    if (coordinates.length === 0) {
+      for (const key of Object.keys(navPath)) {
+        const value = navPath[key];
+        if (Array.isArray(value)) {
+          value.forEach((item: any) => parsePointCandidate(item));
+        } else if (typeof value === 'object') {
+          parsePointCandidate(value);
+        }
+      }
+    }
+
+    return coordinates;
   }
 
   private drawRoute(puntos: { x: number, y: number, z: number }[]): void {

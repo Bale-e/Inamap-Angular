@@ -49,6 +49,51 @@ describe('Map3dContainerComponent search autocomplete', () => {
     expect(component.filteredDestinations).toEqual(['Biblioteca', 'Sala de Tutorías 1']);
     expect(suggestionsPanel.innerHTML).toContain('Biblioteca');
   });
+
+  it('should normalize and collect all location search values for a location object', () => {
+    const component = new Map3dContainerComponent(
+      {} as Firebase,
+      { run: (fn: () => unknown) => fn() } as NgZone,
+      { detectChanges: () => undefined } as ChangeDetectorRef
+    );
+
+    const location = {
+      Nombre: 'Sala A104',
+      id: 'sala-a104',
+      edificio: 'Edificio A',
+      piso: '2',
+      descripcion: 'Aula de cómputo'
+    } as any;
+
+    const values = (component as any).getLocationSearchValues(location) as string[];
+
+    expect(values).toContain('Sala A104');
+    expect(values).toContain('sala-a104');
+    expect(values).toContain('Edificio A');
+    expect(values).toContain('2');
+    expect(values).toContain('Aula de cómputo');
+    expect(values.filter(v => v === 'Sala A104').length).toBe(1);
+  });
+
+  it('should extract coordinates from uppercase X/Y/Z fields', () => {
+    const component = new Map3dContainerComponent(
+      {} as Firebase,
+      { run: (fn: () => unknown) => fn() } as NgZone,
+      { detectChanges: () => undefined } as ChangeDetectorRef
+    );
+
+    const location = {
+      Nombre: 'Sala A104',
+      Coordenadas: { X: 33.233, Y: 0.561, Z: 1.241 }
+    } as any;
+
+    const coordinate = (component as any).extractCoordinateFromLocation(location) as any;
+
+    expect(coordinate).not.toBeNull();
+    expect(coordinate.x).toBe(33.233);
+    expect(coordinate.y).toBe(0.561);
+    expect(coordinate.z).toBe(1.241);
+  });
 });
 
 describe('Map3dContainerComponent viewport wheel handling', () => {

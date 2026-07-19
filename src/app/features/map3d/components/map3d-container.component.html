@@ -6,7 +6,10 @@ ng serve <!--
 <div class="map-body">
   <div class="view-3d">
     <div class="view-banner">
-      <input id="searchPlaceInput" class="search-input" type="text" placeholder="Buscar destino" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+      <div class="search-wrapper">
+        <input id="searchPlaceInput" class="search-input" type="text" placeholder="Buscar destino" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+        <div class="search-status" *ngIf="destinationCoordinatesText">{{ destinationCoordinatesText }}</div>
+      </div>
     </div>
     <div #renderCanvas class="render-canvas"></div>
 

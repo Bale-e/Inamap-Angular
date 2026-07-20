@@ -20,12 +20,21 @@
       </button>
 
       <div class="floor-action__dialog" [class.visible]="floorDialogVisible">
-        <p>¿A qué piso quieres ir?</p>
-        <div class="floor-action__dialog-buttons">
-          <button type="button" (click)="selectFloor('first')">Primer piso</button>
-          <button type="button" (click)="selectFloor('second')">Segundo piso</button>
-          <button type="button" (click)="selectFloor('third')">Tercer piso</button>
-        </div>
+        <ng-container *ngIf="currentBuilding !== 'S'; else selectBuildingTpl">
+          <p>¿A qué piso quieres ir?</p>
+          <div class="floor-action__dialog-buttons">
+            <button type="button" (click)="selectFloor('first')">Primer piso</button>
+            <button type="button" (click)="selectFloor('second')">Segundo piso</button>
+            <button type="button" (click)="selectFloor('third')">Tercer piso</button>
+          </div>
+        </ng-container>
+        <ng-template #selectBuildingTpl>
+          <p>Seleccionar Edificio</p>
+          <div class="floor-action__dialog-buttons">
+            <button type="button" (click)="selectBuilding('A')">Edificio A</button>
+            <button type="button" (click)="selectBuilding('B')">Edificio B</button>
+          </div>
+        </ng-template>
         <button class="floor-action__dialog-close" type="button" (click)="closeFloorDialog()">Cancelar</button>
       </div>
     </div>

@@ -29,8 +29,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   private readonly buildingBFirstFloorModel = 'Edificio B - Piso 1.obj';
   private readonly buildingBSecondFloorModel = 'Edificio B - Piso 2.obj';
   private readonly buildingBThirdFloorModel = 'Edificio B - Piso 3.obj';
+  private readonly sedeModel = 'MODELO_INACAP_FIXED.obj';
   currentFloor = this.firstFloorModel;
-  private currentBuilding: 'A' | 'B' = 'A';
+  public currentBuilding: 'A' | 'B' | 'S' = 'A';
 
   private engine: BABYLON.Engine | null = null;
   private scene: BABYLON.Scene | null = null;
@@ -257,7 +258,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     });
     this.mainMapMarker.addEventListener('click', (e) => {
       e.stopPropagation();
-      // Intención futura: navegar al mapa principal si está implementado.
+      this.goToSede();
     });
     document.body.appendChild(this.mainMapMarker);
   }
@@ -779,6 +780,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
   private getCurrentFloorName(): string {
     const normalized = this.currentFloor.toLowerCase();
+    if (normalized === this.sedeModel.toLowerCase()) {
+      return 'Mapa Principal';
+    }
     if (normalized.includes('piso 1')) {
       return 'Piso 1';
     }
@@ -791,7 +795,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     return 'Piso 1';
   }
 
-  private matchLocationBuilding(location: any, building: 'A' | 'B'): boolean {
+  private matchLocationBuilding(location: any, building: 'A' | 'B' | 'S'): boolean {
     const edificioField = this.getObjectFieldIgnoreCase(location, '_edificioNombre') ||
                          this.getObjectFieldIgnoreCase(location, 'edificio') ||
                          this.getObjectFieldIgnoreCase(location, 'building') ||
@@ -1019,6 +1023,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   get floorActionLabel(): string {
+    if (this.currentBuilding === 'S') {
+      return 'Seleccionar edificio';
+    }
     // Edificio A
     if (this.currentBuilding === 'A') {
       if (this.currentFloor === this.secondFloorModel) {
@@ -1041,6 +1048,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   get floorActionIcon(): string {
+    if (this.currentBuilding === 'S') {
+      return '🏢';
+    }
     const isFirstFloor = (this.currentBuilding === 'A' && this.currentFloor === this.firstFloorModel) ||
                          (this.currentBuilding === 'B' && this.currentFloor === this.buildingBFirstFloorModel);
     return isFirstFloor ? '↑' : '↓';
@@ -1207,11 +1217,36 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  private goToSede(): void {
+    this.currentBuilding = 'S';
+    if (this.currentFloor !== this.sedeModel) {
+      this.currentFloor = this.sedeModel;
+      if (this.viewMode === '3d') {
+        this.init3dScene();
+      }
+    }
+
+    if (this.viewMode !== '3d') {
+      this.setView('3d');
+    }
+  }
+
+  public selectBuilding(building: 'A' | 'B'): void {
+    this.floorDialogVisible = false;
+    if (building === 'A') {
+      this.goToBuildingAFirstFloor();
+    } else {
+      this.goToBuildingBFirstFloor();
+    }
+  }
+
   private handleBuildingAMarkerClick(): void {
     if (this.currentFloor === this.buildingBThirdFloorModel) {
       this.goToBuildingAThirdFloor();
     } else if (this.currentFloor === this.buildingBSecondFloorModel) {
       this.goToBuildingASecondFloor();
+    } else if (this.currentFloor === this.buildingBFirstFloorModel) {
+      this.goToSede();
     } else {
       this.goToBuildingAFirstFloor();
     }
@@ -1514,12 +1549,15 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
     const modelName = this.currentFloor;
     const isBuildingB = [this.buildingBFirstFloorModel, this.buildingBSecondFloorModel, this.buildingBThirdFloorModel].includes(modelName);
-    const modelRoot = isBuildingB
-      ? '/assets/3d-models/Edificio B/'
-      : '/assets/3d-models/Edificio A/';
+    const isSede = modelName === this.sedeModel;
+    const modelRoot = isSede
+      ? '/assets/3d-models/sede/'
+      : isBuildingB
+        ? '/assets/3d-models/Edificio B/'
+        : '/assets/3d-models/Edificio A/';
 
     // Actualizar el edificio actual
-    this.currentBuilding = isBuildingB ? 'B' : 'A';
+    this.currentBuilding = isSede ? 'S' : (isBuildingB ? 'B' : 'A');
 
     try {
       const result = await BABYLON.SceneLoader.ImportMeshAsync(

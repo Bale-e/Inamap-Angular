@@ -153,14 +153,37 @@ async getLocacionesDeTodosLosEdificios() {
     return normalized;
   }
 
-  async getNavigationPath(piso: string) {
+  async getNavigationPath(piso: string, edificio?: string) {
     const todas = await this.getNavigationPaths();
     const pisoNormalizado = this.normalizeFloorKey(piso);
+    const edificioNormalizado = edificio ? edificio.trim().toLowerCase() : '';
 
     return todas.find((doc: any) => {
-      const pisoValor = getFieldCI(doc, 'Piso') ?? getFieldCI(doc, 'Piso ');
+      // 1. Filtrar por Piso
+      const pisoValor = getFieldCI(doc, 'Piso') ?? getFieldCI(doc, 'Piso ') ?? getFieldCI(doc, 'piso');
       const normalizedPiso = this.normalizeFloorKey((pisoValor ?? '').toString());
-      return normalizedPiso === pisoNormalizado;
+      if (normalizedPiso !== pisoNormalizado) {
+        return false;
+      }
+
+      // 2. Filtrar por Edificio si está presente
+      if (edificioNormalizado) {
+        const edValor = (getFieldCI(doc, 'Edificio') ?? getFieldCI(doc, 'edificio') ?? '').toString().trim().toLowerCase();
+        
+        // Formatos esperados: 'edificioa', 'edificio a', 'a', etc.
+        const matchesDirect = edValor === edificioNormalizado;
+        const matchesWithWord = edValor.includes(`edificio${edificioNormalizado}`) || 
+                                edValor.includes(`edificio ${edificioNormalizado}`);
+        const matchesShort = edValor === `edificio${edificioNormalizado}` || 
+                             edValor === `edificio ${edificioNormalizado}`;
+                             
+        // Por si acaso el id del documento o el valor es simplemente el string
+        if (!matchesDirect && !matchesWithWord && !matchesShort) {
+          return false;
+        }
+      }
+
+      return true;
     }) ?? null;
   }
 

@@ -69,7 +69,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   filteredDestinations: string[] = [];
   selectedDestination: string | null = null;
   public destinationCoordinatesText = '';
-  private destinationMarker: BABYLON.Mesh | null = null;
+  private destinationMarker: BABYLON.TransformNode | BABYLON.Mesh | null = null;
 
   private onDocumentClick = (evt: MouseEvent): void => {
     const target = evt.target as Node | null;
@@ -815,6 +815,17 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     return pisoValue;
   }
 
+  private getLocationBuildingLetter(location: any): 'A' | 'B' | 'S' {
+    const edificioField = this.getObjectFieldIgnoreCase(location, '_edificioNombre') ||
+                          this.getObjectFieldIgnoreCase(location, 'edificio') ||
+                          this.getObjectFieldIgnoreCase(location, 'building') ||
+                          this.getObjectFieldIgnoreCase(location, '_edificioId');
+    const val = (edificioField ?? '').toString().trim().toLowerCase();
+    if (val.includes('b') || val === 'b') return 'B';
+    if (val.includes('s') || val === 's' || val.includes('sede')) return 'S';
+    return 'A';
+  }
+
   private getLocationBuildingText(location: any): string {
     const edificioField = this.getObjectFieldIgnoreCase(location, '_edificioNombre') ||
                          this.getObjectFieldIgnoreCase(location, 'edificio') ||
@@ -887,7 +898,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       const coordsText = `Coordenadas 3D: (${coordinate.x.toFixed(2)}, ${coordinate.y.toFixed(2)}, ${coordinate.z.toFixed(2)})`;
       this.destinationCoordinatesText = `${destination} — ${locationBuilding} / ${locationFloor}: ${coordsText}`;
       this.showDestinationMarker(coordinate);
-      const ruta = await this.buildRoute(coordinate, locationFloor);
+      const locationBuildingLetter = this.getLocationBuildingLetter(location);
+      const ruta = await this.buildRoute(coordinate, locationFloor, locationBuildingLetter);
       this.drawRoute(ruta);
       return;
     }
@@ -901,18 +913,54 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     this.clearDestinationMarker();
 
     try {
-      const marker = BABYLON.MeshBuilder.CreateSphere('destinationMarker', { diameter: 0.35 }, this.scene);
-      marker.position = coordinate.clone();
-      marker.isPickable = false;
-      marker.renderingGroupId = 1;
+      // Crear un nodo padre para el pin
+      const marker = new BABYLON.TransformNode('destinationMarker', this.scene);
+      marker.position = new BABYLON.Vector3(coordinate.x, Math.max(coordinate.y, 0.05), coordinate.z);
 
       const material = new BABYLON.StandardMaterial('destinationMarkerMat', this.scene);
-      material.diffuseColor = new BABYLON.Color3(0.05, 0.75, 0.95);
-      material.emissiveColor = new BABYLON.Color3(0.2, 0.95, 1);
-      material.alpha = 0.9;
-      marker.material = material;
+      material.diffuseColor = new BABYLON.Color3(0.95, 0.05, 0.05); // Rojo
+      material.emissiveColor = new BABYLON.Color3(0.8, 0.1, 0.1);
+      material.alpha = 0.95;
 
-      this.destinationMarker = marker;
+      // Esfera superior del pin
+      const sphere = BABYLON.MeshBuilder.CreateSphere('destSphere', { diameter: 0.6 }, this.scene);
+      sphere.position.y = 1.2;
+      sphere.material = material;
+      sphere.isPickable = false;
+      sphere.renderingGroupId = 1;
+      sphere.parent = marker;
+
+      // Cono inferior del pin
+      const cone = BABYLON.MeshBuilder.CreateCylinder('destCone', {
+        height: 0.9,
+        diameterTop: 0.6,
+        diameterBottom: 0
+      }, this.scene);
+      cone.position.y = 0.45;
+      cone.material = material;
+      cone.isPickable = false;
+      cone.renderingGroupId = 1;
+      cone.parent = marker;
+
+      // Animación de rebote flotante
+      const bounceAnim = new BABYLON.Animation(
+        'bounce',
+        'position.y',
+        30,
+        BABYLON.Animation.ANIMATIONTYPE_FLOAT,
+        BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
+      );
+      const keys = [
+        { frame: 0, value: marker.position.y },
+        { frame: 30, value: marker.position.y + 0.4 },
+        { frame: 60, value: marker.position.y }
+      ];
+      bounceAnim.setKeys(keys);
+      marker.animations = [bounceAnim];
+      this.scene.beginAnimation(marker, 0, 60, true);
+
+      // Guardar referencia
+      this.destinationMarker = marker as any; // Cast para evitar error de tipado si espera Mesh en vez de TransformNode, o manejamos el error
     } catch (error) {
       console.warn('No se pudo crear el marcador de destino:', error);
     }
@@ -2001,97 +2049,259 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private async buildRoute(destino: { x: number, y: number, z: number }, piso: string): Promise<{ x: number, y: number, z: number }[]> {
-    const navPath = await this.firebaseService.getNavigationPath(piso);
-    const puntos: { x: number, y: number, z: number }[] = [this.mainEntranceAccess];
-
-    const pathPoints = this.extractNavigationPathCoordinates(navPath);
-    if (pathPoints.length > 0) {
-      puntos.push(...pathPoints);
+  // ── Extrae un Vector3 desde un objeto de Firestore que puede tener ──────
+  // campos {x, y, z} directamente o anidados bajo "Coordenadas3D" / "Coordenadas 3D".
+  private extractVec3(obj: any): BABYLON.Vector3 | null {
+    if (!obj || typeof obj !== 'object') return null;
+    // Buscar campo de coordenadas anidado
+    const nested =
+      obj['Coordenadas3D'] ?? obj['Coordenadas 3D'] ??
+      obj['Coordenadas'] ?? obj['coordenadas'] ??
+      obj['coordinates'] ?? obj['coords'] ?? null;
+    const src = nested ?? obj;
+    const x = this.getObjectFieldIgnoreCase(src, 'x');
+    const y = this.getObjectFieldIgnoreCase(src, 'y');
+    const z = this.getObjectFieldIgnoreCase(src, 'z');
+    if (x != null && y != null && z != null &&
+        typeof x === 'number' && typeof y === 'number' && typeof z === 'number') {
+      return new BABYLON.Vector3(x, Math.max(y, 0.05), z);
     }
-
-    puntos.push(destino);
-    return puntos;
+    return null;
   }
 
-  private extractNavigationPathCoordinates(navPath: any): { x: number, y: number, z: number }[] {
-    if (!navPath || typeof navPath !== 'object') {
-      return [];
+  // ── Distancia al cuadrado entre dos puntos (sin sqrt para comparación) ──
+  private distSq(a: BABYLON.Vector3, b: BABYLON.Vector3): number {
+    const dx = a.x - b.x;
+    const dz = a.z - b.z;
+    return dx * dx + dz * dz;  // ignoramos Y para navegación en planta
+  }
+
+  // ── Construye el camino óptimo a través de los nodos del pasillo ─────────
+  //
+  // Estrategia:
+  //   1. Nodos del pasillo = Accesos + Giros (la columna vertebral)
+  //   2. Conectar los nodos usando Nearest-Neighbor para formar la polilínea del pasillo.
+  //   3. Encontrar el punto más cercano (proyección ortogonal) en los segmentos
+  //      de la polilínea hacia el destino.
+  //   4. El camino será: Entrada -> nodos del pasillo hasta el segmento óptimo -> 
+  //      punto de proyección (doblar justo al frente) -> destino.
+  private buildOptimalPath(
+    entry: BABYLON.Vector3,
+    accesos: BABYLON.Vector3[],
+    giros: BABYLON.Vector3[],
+    destination: BABYLON.Vector3
+  ): BABYLON.Vector3[] {
+    const route: BABYLON.Vector3[] = [new BABYLON.Vector3(entry.x, entry.y, entry.z)];
+    const corridorNodes = [...accesos, ...giros];
+
+    if (corridorNodes.length === 0) {
+      route.push(new BABYLON.Vector3(destination.x, destination.y, destination.z));
+      return route;
     }
 
-    const coordinates: { x: number, y: number, z: number }[] = [];
-    const addPoint = (point: any) => {
-      const coordinate = this.extractCoordinateFromLocation(point);
-      if (coordinate) {
-        coordinates.push({ x: coordinate.x, y: coordinate.y, z: coordinate.z });
-      }
-    };
+    // 1. Construir la polilínea del pasillo (Nearest-Neighbor)
+    // Empezamos obligatoriamente con el primer Acceso para marcar la dirección correcta del pasillo,
+    // o con el primer Giro si no hay accesos.
+    const startNode = accesos.length > 0 ? accesos[0] : giros[0];
+    const remaining = corridorNodes.filter(node => node !== startNode);
+    const polyline: BABYLON.Vector3[] = [startNode];
+    let current = startNode;
 
-    const parsePointCandidate = (candidate: any) => {
-      if (!candidate || typeof candidate !== 'object') {
-        return;
-      }
-
-      if (candidate['Coordenadas3D'] || candidate['Coordenadas 3D']) {
-        addPoint(candidate['Coordenadas3D'] ?? candidate['Coordenadas 3D']);
-        return;
-      }
-
-      if (candidate['Coordenadas'] || candidate['coordinates'] || candidate['coords']) {
-        addPoint(candidate['Coordenadas'] ?? candidate['coordinates'] ?? candidate['coords']);
-        return;
-      }
-
-      if (Object.keys(candidate).some(key => /coordenadas?/i.test(key))) {
-        addPoint(candidate);
-        return;
-      }
-
-      Object.values(candidate).forEach(value => addPoint(value));
-    };
-
-    if (Array.isArray(navPath.Accesos) || typeof navPath.Accesos === 'object') {
-      const accesos = navPath.Accesos;
-      if (Array.isArray(accesos)) {
-        accesos.forEach((item: any) => parsePointCandidate(item));
-      } else {
-        Object.values(accesos).forEach((item: any) => parsePointCandidate(item));
-      }
-    }
-
-    if (Array.isArray(navPath.Conexiones)) {
-      navPath.Conexiones.forEach((item: any) => parsePointCandidate(item));
-    }
-
-    if (Array.isArray(navPath.Giros)) {
-      navPath.Giros.forEach((giro: any) => parsePointCandidate(giro));
-    }
-
-    if (Array.isArray(navPath.Turns) || Array.isArray(navPath.turns)) {
-      const turns = navPath.Turns ?? navPath.turns;
-      turns.forEach((turn: any) => parsePointCandidate(turn));
-    }
-
-    if (coordinates.length === 0) {
-      for (const key of Object.keys(navPath)) {
-        const value = navPath[key];
-        if (Array.isArray(value)) {
-          value.forEach((item: any) => parsePointCandidate(item));
-        } else if (typeof value === 'object') {
-          parsePointCandidate(value);
+    while (remaining.length > 0) {
+      let bestIdx = -1;
+      let bestDist = Infinity;
+      for (let i = 0; i < remaining.length; i++) {
+        const d = this.distSq(current, remaining[i]);
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = i;
         }
       }
+      const nextNode = remaining.splice(bestIdx, 1)[0];
+      polyline.push(nextNode);
+      current = nextNode;
     }
 
-    return coordinates;
+    // 2. Encontrar el punto de proyección ortogonal más cercano al destino
+    let bestPoint = polyline[0].clone();
+    let minTargetDist = Infinity;
+    let bestSegmentIndex = 0;
+
+    for (let i = 0; i < polyline.length - 1; i++) {
+      const A = polyline[i];
+      const B = polyline[i + 1];
+      const isLastSegment = (i === polyline.length - 2);
+
+      let projX = A.x;
+      let projZ = A.z;
+
+      if (isLastSegment) {
+        // En el último segmento, extrapolamos en el eje cardinal principal para cubrir pasillos incompletos
+        const dx = B.x - A.x;
+        const dz = B.z - A.z;
+        const absDx = Math.abs(dx);
+        const absDz = Math.abs(dz);
+
+        if (absDx > 0.0001 || absDz > 0.0001) {
+          if (absDx > absDz) {
+            // Eje principal X
+            const dirX = dx > 0 ? 1 : -1;
+            const t = (destination.x - A.x) * dirX;
+            if (t >= 0) {
+              projX = destination.x;
+            } else {
+              projX = A.x;
+            }
+            projZ = A.z;
+          } else {
+            // Eje principal Z
+            const dirZ = dz > 0 ? 1 : -1;
+            const t = (destination.z - A.z) * dirZ;
+            if (t >= 0) {
+              projZ = destination.z;
+            } else {
+              projZ = A.z;
+            }
+            projX = A.x;
+          }
+        }
+      } else {
+        // En segmentos intermedios, hacemos proyección acotada convencional
+        const dx = B.x - A.x;
+        const dz = B.z - A.z;
+        const lenSq = dx * dx + dz * dz;
+
+        let t = 0;
+        if (lenSq > 0.0001) {
+          const dot = (destination.x - A.x) * dx + (destination.z - A.z) * dz;
+          t = Math.max(0, Math.min(1, dot / lenSq));
+        }
+        projX = A.x + t * dx;
+        projZ = A.z + t * dz;
+      }
+
+      // Distancia desde el destino al punto proyectado en el pasillo
+      const distSqToProj = (destination.x - projX) * (destination.x - projX) + (destination.z - projZ) * (destination.z - projZ);
+      
+      if (distSqToProj < minTargetDist) {
+        minTargetDist = distSqToProj;
+        bestPoint = new BABYLON.Vector3(projX, entry.y, projZ);
+        bestSegmentIndex = i;
+      }
+    }
+
+    // 3. Construir la ruta final
+    // Agregar nodos del pasillo hasta el inicio del mejor segmento
+    for (let i = 0; i <= bestSegmentIndex; i++) {
+      if (i === 0 && this.distSq(entry, polyline[0]) < 0.01) {
+        continue;
+      }
+      route.push(new BABYLON.Vector3(polyline[i].x, polyline[i].y, polyline[i].z));
+    }
+
+    // Agregar el punto de proyección (el punto donde dobla frente a la sala)
+    const lastNode = route[route.length - 1];
+    if (this.distSq(lastNode, bestPoint) > 0.01) {
+      route.push(bestPoint);
+    }
+
+    // Agregar el destino final
+    if (this.distSq(bestPoint, destination) > 0.01) {
+      route.push(new BABYLON.Vector3(destination.x, destination.y, destination.z));
+    }
+
+    return route;
   }
 
-  private drawRoute(puntos: { x: number, y: number, z: number }[]): void {
-  if (!this.scene) return;
-  for (let i = 0; i < puntos.length - 1; i++) {
-    const from = new BABYLON.Vector3(puntos[i].x, puntos[i].y, puntos[i].z);
-    const to   = new BABYLON.Vector3(puntos[i + 1].x, puntos[i + 1].y, puntos[i + 1].z);
-    this.pathMeshes.push(...dibujarFlechaGuia(this.scene, from, to));
+  // ── Extrae todos los nodos del navPath separándolos en Accesos y Giros ─────
+  private parseNavPath(navPath: any): {
+    accesos: BABYLON.Vector3[];
+    giros: BABYLON.Vector3[];
+  } {
+    const accesos: BABYLON.Vector3[] = [];
+    const giros: BABYLON.Vector3[] = [];
+
+    if (!navPath || typeof navPath !== 'object') {
+      return { accesos, giros };
+    }
+
+    // Accesos — entrada/salida del corredor (nodos del pasillo)
+    if (navPath.Accesos && typeof navPath.Accesos === 'object') {
+      const items = Array.isArray(navPath.Accesos) ? navPath.Accesos : Object.values(navPath.Accesos);
+      for (const item of items) {
+        const v = this.extractVec3(item as any);
+        if (v) accesos.push(v);
+      }
+    }
+
+    // Giros — nodos donde el pasillo dobla (nodos del pasillo)
+    if (Array.isArray(navPath.Giros)) {
+      for (const giro of navPath.Giros) {
+        const v = this.extractVec3(giro);
+        if (v) giros.push(v);
+      }
+    }
+
+    if (Array.isArray(navPath.Turns ?? navPath.turns)) {
+      for (const turn of (navPath.Turns ?? navPath.turns)) {
+        const v = this.extractVec3(turn);
+        if (v) giros.push(v);
+      }
+    }
+
+    return { accesos, giros };
   }
-}
+
+  // ── Construye la ruta completa desde el punto de entrada hasta el destino ─
+  private async buildRoute(
+    destino: { x: number, y: number, z: number },
+    piso: string,
+    edificio: string
+  ): Promise<{ x: number, y: number, z: number }[]> {
+    const navPath = await this.firebaseService.getNavigationPath(piso, edificio);
+    const destination = new BABYLON.Vector3(destino.x, Math.max(destino.y, 0.05), destino.z);
+
+    if (!navPath) {
+      // Sin navPath: línea directa desde la entrada al destino
+      return [
+        { x: this.mainEntranceAccess.x, y: this.mainEntranceAccess.y, z: this.mainEntranceAccess.z },
+        { x: destination.x, y: destination.y, z: destination.z }
+      ];
+    }
+
+    const { accesos, giros } = this.parseNavPath(navPath);
+    const entry = this.mainEntranceAccess.clone();
+
+    console.log(`[buildRoute] Piso: ${piso} | Destino: (${destino.x.toFixed(2)}, ${destino.z.toFixed(2)})`);
+    console.log(`[buildRoute] Nodos pasillo encontrados: ${accesos.length + giros.length}`);
+
+    return this.buildOptimalPath(entry, accesos, giros, destination);
+  }
+
+  // ── Dibuja la ruta de forma progresiva, segmento a segmento ────────────
+  // Cada segmento aparece con un retraso de ~500 ms para que el usuario
+  // pueda seguir visualmente el recorrido antes de que llegue al destino.
+  private drawRoute(puntos: { x: number, y: number, z: number }[]): void {
+    if (!this.scene) return;
+    const totalSegments = puntos.length - 1;
+    if (totalSegments <= 0) return;
+    console.log(`[drawRoute] Dibujando ${puntos.length} puntos de ruta (animado)`);
+
+    const drawSegment = (i: number) => {
+      if (!this.scene) return;
+      const from = new BABYLON.Vector3(puntos[i].x, Math.max(puntos[i].y, 0.05), puntos[i].z);
+      const to   = new BABYLON.Vector3(puntos[i + 1].x, Math.max(puntos[i + 1].y, 0.05), puntos[i + 1].z);
+      // Color: rojo brillante uniforme en todos los segmentos
+      const color = new BABYLON.Color3(0.95, 0.08, 0.08);
+      this.pathMeshes.push(...dibujarFlechaGuia(this.scene!, from, to, color));
+
+      // Programar el siguiente segmento
+      if (i + 1 < totalSegments) {
+        setTimeout(() => drawSegment(i + 1), 500);
+      }
+    };
+
+    // Comenzar con el primer segmento
+    drawSegment(0);
+  }
 }

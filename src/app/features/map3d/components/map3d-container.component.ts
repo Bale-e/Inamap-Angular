@@ -8,7 +8,7 @@ import * as BABYLON from 'babylonjs';
 import 'babylonjs-loaders';
 import { HttpClient } from '@angular/common/http';
 import { Firebase } from '../../../services/firebase';
-import { dibujarFlechaGuia } from '../../../services/flecha_guía';
+import { dibujarFlechaGuia } from '../../../services/guide-arrow.service';
 
 
 

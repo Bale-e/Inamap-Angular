@@ -8,18 +8,9 @@
 import { Injectable } from '@angular/core';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
+import { environment } from '../../environments/environment';
 
-const firebaseConfig = {
-  apiKey:            "AIzaSyDlEgFdhD76kXdF7FJC48Ih7n-Gk9N3TIk",
-  authDomain:        "bdinago.firebaseapp.com",
-  projectId:         "bdinago",
-  storageBucket:     "bdinago.firebasestorage.app",
-  messagingSenderId: "588945240085",
-  appId:             "1:588945240085:web:bc0e22c909b1a753971e1c",
-  measurementId:     "G-F0C2Y6SKFE"
-};
-
-const app = initializeApp(firebaseConfig);
+const app = initializeApp(environment.firebase);
 const db = getFirestore(app);
 
 const knownCollections = ['Edificios', 'navigation-paths', 'rutas'];

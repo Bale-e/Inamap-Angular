@@ -1,5 +1,6 @@
 /*
   Buscador de rutas basado en la colección navigation_paths.
+  Antes: buscador-ruta.ts  →  Renombrado a: route-finder.service.ts
   Esta utilidad construye una ruta en base a los datos de navegación disponibles,
   partiendo siempre desde un punto de inicio y avanzando hacia un punto final.
 */

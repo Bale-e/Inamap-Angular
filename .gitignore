@@ -34,3 +34,18 @@ yarn-error.log*
 # --- Otros ---
 .env
 dist/
+
+# --- Credenciales y claves privadas ---
+ServiceAccountKey.json
+*ServiceAccount*.json
+server/ServiceAccountKey.json
+*.pem
+*.key
+*.p12
+
+# --- Variables de entorno del servidor ---
+server/.env
+
+# --- Archivos temporales de scripts ---
+temp*.js
+tmp*.js

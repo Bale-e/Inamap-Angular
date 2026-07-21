@@ -1,4 +1,12 @@
-const BASE_URL = 'http://localhost:3000'
+/**
+ * Servicio de acceso a la API REST del backend (Express/Firestore).
+ * Antes: pedidos-api.ts  →  Renombrado a: api.service.ts
+ * Nota: Las funciones son exportaciones directas; en el futuro se puede
+ * convertir en un @Injectable que use HttpClient de Angular.
+ */
+import { environment } from '../../environments/environment';
+
+const BASE_URL = environment.apiUrl;
 
 // ── EDIFICIOS ──────────────────────────────────────────────
 export async function getEdificios() {

@@ -1,3 +1,7 @@
+/**
+ * Utilidades para dibujar flechas guía de navegación en la escena BabylonJS.
+ * Antes: flecha_guía.ts  →  Renombrado a: guide-arrow.service.ts
+ */
 import * as BABYLON from 'babylonjs';
 
 // Color rojo estándar para el corredor principal

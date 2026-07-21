@@ -4,7 +4,7 @@
  */
 import { Component, OnInit } from '@angular/core';
 import { Firebase } from './services/firebase';
-import { getEdificios } from './services/pedidos-api';
+import { getEdificios } from './services/api.service';
 
 @Component({
   selector: 'app-root',

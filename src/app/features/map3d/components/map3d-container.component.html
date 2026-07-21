@@ -1,100 +1,53 @@
 <!--
   Plantilla del componente `Map3dContainerComponent`.
-  Descripción: estructura la vista 2D/3D, controles de piso, zoom y marcadores.
 -->
-
 <div class="map-body">
   <div class="view-3d">
-    <div class="view-banner">
-      <div class="search-wrapper">
-        <input id="searchPlaceInput" class="search-input" type="text" placeholder="Buscar destino" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-        <div class="search-status" *ngIf="destinationCoordinatesText">{{ destinationCoordinatesText }}</div>
-      </div>
-    </div>
+    <!-- Componente de búsqueda superior -->
+    <app-map-search
+      [destinations]="destinations"
+      [statusText]="destinationCoordinatesText"
+      (destinationSelected)="onDestinationSelected($event)"
+      (searchCleared)="onSearchCleared()"
+    ></app-map-search>
+
+    <!-- Canvas para la escena BabylonJS -->
     <div #renderCanvas class="render-canvas"></div>
 
-    <div class="floor-action">
-      <button class="floor-action__button" type="button" (click)="openFloorDialog()" aria-label="Seleccionar piso">
-        <span class="floor-action__ring"></span>
-        <span class="floor-action__icon">{{ floorActionIcon }}</span>
-      </button>
-
-      <div class="floor-action__dialog" [class.visible]="floorDialogVisible">
-        <ng-container *ngIf="currentBuilding !== 'S'; else selectBuildingTpl">
-          <p>¿A qué piso quieres ir?</p>
-          <div class="floor-action__dialog-buttons">
-            <button type="button" (click)="selectFloor('first')">Primer piso</button>
-            <button type="button" (click)="selectFloor('second')">Segundo piso</button>
-            <button type="button" (click)="selectFloor('third')">Tercer piso</button>
-          </div>
-        </ng-container>
-        <ng-template #selectBuildingTpl>
-          <p>Seleccionar Edificio</p>
-          <div class="floor-action__dialog-buttons">
-            <button type="button" (click)="selectBuilding('A')">Edificio A</button>
-            <button type="button" (click)="selectBuilding('B')">Edificio B</button>
-          </div>
-        </ng-template>
-        <button class="floor-action__dialog-close" type="button" (click)="closeFloorDialog()">Cancelar</button>
+    <!-- Marcadores de transición proyectados en pantalla -->
+    <ng-container *ngFor="let marker of screenMarkers">
+      <div
+        *ngIf="marker.visible"
+        class="screen-marker-badge marker-building"
+        [style.left.px]="marker.x"
+        [style.top.px]="marker.y"
+        (mousedown)="$event.stopPropagation(); onMarkerClicked(marker)"
+        (click)="$event.stopPropagation(); onMarkerClicked(marker)"
+      >
+        <span>{{ marker.label }}</span>
       </div>
-    </div>
+    </ng-container>
 
-    <div class="cuerpo23-click-hint" [class.visible]="cuerpo23HintVisible" [style.left.px]="cuerpo23HintX" [style.top.px]="cuerpo23HintY">
-      <span class="cuerpo23-click-hint-arrow">↑</span>
-      <span>Ir al segundo piso</span>
-    </div>
+    <!-- Selector flotante de piso y edificio -->
+    <app-floor-selector
+      [currentBuilding]="currentBuilding"
+      (floorSelected)="onFloorSelected($event)"
+      (buildingSelected)="onBuildingSelected($event)"
+    ></app-floor-selector>
 
-    <div class="zoom-controls">
-      <button class="zoom-btn" (click)="zoomIn()" title="Acercar">+</button>
-      <button class="zoom-btn" (click)="zoomOut()" title="Alejar" [disabled]="!zoomOutEnabled">-</button>
-    </div>
+    <!-- Controles flotantes de Zoom y Cámara -->
+    <app-map-controls
+      (zoomIn)="onZoomIn()"
+      (zoomOut)="onZoomOut()"
+      (resetCamera)="onResetCamera()"
+    ></app-map-controls>
 
-    <!-- Eliminé el panel secundario; la barra principal es el único control de búsqueda. -->
+    <!-- Panel lateral de detalle de locación -->
+    <app-location-detail-panel
+      [locationInfo]="selectedLocationInfo"
+      [isOpen]="isDetailPanelOpen"
+      (close)="closeDetailPanel()"
+      (navigateTo)="onDestinationSelected($event)"
+    ></app-location-detail-panel>
   </div>
-
-  <!-- Fotocopiadora -->
-  <div class="marker" id="marker-foto">
-    <button class="marker__btn" (click)="toggleMarker('info-foto')">ℹ️</button>
-    <div class="marker__card" id="info-foto" style="display:none">
-      <p class="marker__nombre">Fotocopiadora y Suministros</p>
-      <p class="marker__desc">Servicio de fotocopiado y venta de materiales para estudiantes.</p>
-    </div>
-  </div>
-
-  <!-- Sala de Tutorias 1 -->
-  <div class="marker" id="marker-tuto1">
-    <button class="marker__btn" (click)="toggleMarker('info-tuto1')">ℹ️</button>
-    <div class="marker__card" id="info-tuto1" style="display:none">
-      <p class="marker__nombre">Sala de Tutorías 1</p>
-      <p class="marker__desc">Espacio de apoyo académico con tutores disponibles.</p>
-    </div>
-  </div>
-
-  <!-- Sala de Tutorias 2 -->
-  <div class="marker" id="marker-tuto2">
-    <button class="marker__btn" (click)="toggleMarker('info-tuto2')">ℹ️</button>
-    <div class="marker__card" id="info-tuto2" style="display:none">
-      <p class="marker__nombre">Sala de Tutorías 2</p>
-      <p class="marker__desc">Espacio de apoyo académico con tutores disponibles.</p>
-    </div>
-  </div>
-
-  <!-- Sala de Tutorias 3 -->
-  <div class="marker" id="marker-tuto3">
-    <button class="marker__btn" (click)="toggleMarker('info-tuto3')">ℹ️</button>
-    <div class="marker__card" id="info-tuto3" style="display:none">
-      <p class="marker__nombre">Sala de Tutorías 3</p>
-      <p class="marker__desc">Espacio adicional de tutorías con capacidad para grupos pequeños.</p>
-    </div>
-  </div>
-
-  <!-- Sala de Tutorias 4 -->
-  <div class="marker" id="marker-tuto4">
-    <button class="marker__btn" (click)="toggleMarker('info-tuto4')">ℹ️</button>
-    <div class="marker__card" id="info-tuto4" style="display:none">
-      <p class="marker__nombre">Sala de Tutorías 4</p>
-      <p class="marker__desc">Sala de apoyo académico y reuniones estudiantiles.</p>
-    </div>              
-  </div>
-
 </div>

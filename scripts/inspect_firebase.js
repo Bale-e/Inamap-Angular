@@ -15,58 +15,26 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 async function main() {
-  console.log('\n============================================================');
-  console.log('  INSPECCION DE FIRESTORE - navigation-paths y Edificios');
-  console.log('============================================================\n');
-
-  // 1. navigation-paths
-  console.log('>>> COLECCION: navigation-paths <<<');
-  const navSnap = await getDocs(collection(db, 'navigation-paths'));
-  if (navSnap.empty) {
-    console.log('  [VACIA - no hay documentos]\n');
-  } else {
-    navSnap.docs.forEach(doc => {
-      console.log(`\n  -- Documento ID: ${doc.id} --`);
-      console.log(JSON.stringify(doc.data(), null, 4));
-    });
-  }
-
-  // 2. rutas
-  console.log('\n>>> COLECCION: rutas <<<');
-  const rutasSnap = await getDocs(collection(db, 'rutas'));
-  if (rutasSnap.empty) {
-    console.log('  [VACIA - no hay documentos]\n');
-  } else {
-    rutasSnap.docs.forEach(doc => {
-      console.log(`\n  -- Documento ID: ${doc.id} --`);
-      console.log(JSON.stringify(doc.data(), null, 4));
-    });
-  }
-
-  // 3. Edificios + Locaciones
-  console.log('\n>>> COLECCION: Edificios <<<');
   const edSnap = await getDocs(collection(db, 'Edificios'));
-  const edificios = edSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  console.log('  Edificios encontrados:', edificios.map(e => e.id).join(', '));
-
-  for (const edificio of edificios) {
-    const pisoColecciones = ['Locaciones', 'Locaciones piso -1', 'Locaciones piso 2', 'Locaciones piso 3'];
-    for (const colName of pisoColecciones) {
-      const colRef = collection(db, `Edificios/${edificio.id}/${colName}`);
+  for (const edDoc of edSnap.docs) {
+    const edData = edDoc.data();
+    const edNombre = edData.Nombre || edData.nombre || edDoc.id;
+    const subCols = ['Locaciones', 'Locaciones piso -1', 'Locaciones piso 1', 'Locaciones piso 2', 'Locaciones piso 3'];
+    for (const sub of subCols) {
       try {
-        const locSnap = await getDocs(colRef);
-        if (!locSnap.empty) {
-          console.log(`\n  [Edificio: ${edificio.id}] [${colName}] -> ${locSnap.size} documentos`);
-          locSnap.docs.forEach(d => {
-            console.log(`    id: ${d.id} ->`, JSON.stringify(d.data(), null, 6));
+        const snap = await getDocs(collection(db, `Edificios/${edDoc.id}/${sub}`));
+        if (!snap.empty) {
+          snap.docs.forEach(doc => {
+            const d = doc.data();
+            const nombre = d.Nombre || d.nombre;
+            if (nombre && /A20[35]|A205|A203|Cuerpo/i.test(nombre)) {
+              console.log(`[Edificio: ${edNombre}] [${sub}] ${doc.id} ->`, JSON.stringify(d));
+            }
           });
         }
-      } catch (e) {
-        // coleccion no existe, ignorar
-      }
+      } catch (e) {}
     }
   }
-
   process.exit(0);
 }
 

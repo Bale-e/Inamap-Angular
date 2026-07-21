@@ -3,14 +3,9 @@
   width: 100%;
   height: calc(100vh - 64px);
   touch-action: none;
-  background: #111;
+  background: #0f141d;
   color: #fff;
 }
-
-/*
-  Estilos para `Map3dContainerComponent`.
-  Descripción: define la maquetación del visor 2D/3D, controles y marcadores en pantalla.
-*/
 
 .map-body {
   width: 100%;
@@ -19,60 +14,14 @@
   overflow: hidden;
 }
 
-.view-2d,
 .view-3d {
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #111;
+  background: #0f141d;
   position: relative;
-}
-
-.view-2d {
-  cursor: pointer;
-}
-
-.plan-image {
-  max-width: 95%;
-  max-height: 95%;
-  border: 2px solid #444;
-  border-radius: 6px;
-  background: #fff;
-}
-
-.plan-image {
-  max-width: 95%;
-  max-height: 95%;
-  border: 2px solid #444;
-  border-radius: 6px;
-  background: #fff;
-}
-
-.plan-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 32px 40px;
-  border: 2px dashed rgba(255, 255, 255, 0.35);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.04);
-  text-align: center;
-}
-
-.plan-placeholder__title {
-  font-size: 32px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.plan-placeholder__subtitle {
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.7);
-  max-width: 320px;
 }
 
 .render-canvas {
@@ -80,264 +29,44 @@
   height: 100%;
 }
 
-.babylon-canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.zoom-controls {
+.screen-marker-badge {
   position: absolute;
-  bottom: 20px;
-  right: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 10;
-}
-
-.view-banner {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    display: inline-flex;
-    align-items: flex-start;
-    gap: 16px;
-    padding: 12px 14px;
-    background: rgba(0, 0, 0, 0.88);
-    border-radius: 16px;
-    z-index: 12;
-    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.35);
-    width: auto;
-    max-width: min(420px, calc(100% - 32px));
-  }
-
-  .search-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    width: 100%;
-  }
-
-  .search-status {
-    color: #d0f7ff;
-    font-size: 0.82rem;
-    line-height: 1.3;
-    max-height: 4.2rem;
-    overflow: hidden;
-  }
-
-  .floor-action {
-    position: absolute;
-    left: 20px;
-    bottom: 20px;
-    z-index: 13;
-  }
-
-  .floor-action__button {
-  position: relative;
-  width: 56px;
-  height: 56px;
-  border: none;
-  border-radius: 50%;
-  background: #ff7a00;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
-  color: #fff;
-  cursor: pointer;
-  outline: none;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: auto;
-  overflow: visible;
-
-  &:hover {
-    transform: scale(1.06);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.16);
-  }
-
-  &:hover .floor-action__ring {
-    animation: floor-action-ring 2s linear infinite;
-  }
-}
-
-.floor-action__ring {
-  position: absolute;
-  inset: -6px;
-  border: 1.6px solid rgba(255, 255, 255, 0.7);
-  border-radius: 50%;
-  pointer-events: none;
-  animation: none;
-  transition: animation 0.2s ease;
-}
-
-@keyframes floor-action-ring {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.floor-action__icon {
-  position: relative;
-  z-index: 1;
-  font-size: 20px;
-  line-height: 1;
-}
-
-.floor-action__dialog {
-  position: absolute;
-  left: 72px;
-  bottom: 0;
-  width: 240px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 16px;
-  background: rgba(15, 15, 15, 0.96);
-  color: #fff;
-  font-size: 14px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
-  opacity: 0;
-  visibility: hidden;
-  transform: translateX(-12px) translateY(4px);
-  transition: opacity 0.24s ease, transform 0.24s ease, visibility 0.24s ease;
-  pointer-events: auto;
-}
-
-.floor-action__dialog.visible {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(0) translateY(0);
-}
-
-.floor-action__dialog p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.floor-action__dialog-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.floor-action__dialog-buttons button,
-.floor-action__dialog-close {
-  flex: 1;
-  border: none;
-  border-radius: 10px;
-  padding: 10px 12px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.floor-action__dialog-buttons button {
-  background: #ff7a00;
-  color: #fff;
-}
-
-.floor-action__dialog-close {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-}
-/* (removed unused keyframes to reduce bundle size) */
-
-.zoom-btn {
-  width: 60px;
-  height: 60px;
-  font-size: 24px;
-  font-weight: bold;
-  background: rgb(255, 255, 255);
-  color: black;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.28);
-    border-color: rgba(255, 255, 255, 0.6);
-    transform: translateY(-1px);
-  }
-}
-
-.zoom-btn[disabled] {
-  background: rgba(255, 255, 255, 0.22);
-  color: rgba(0, 0, 0, 0.35);
-  border-color: rgba(255, 255, 255, 0.15);
-  cursor: not-allowed;
-}
-
-
-/* Map control (view buttons) */
-.map-control {
-  padding: 0.6rem;
-  display: flex;
-  justify-content: flex-start;
-  gap: 0.5rem;
-  background: #1d1d1d;
-  border-bottom: 1px solid #2f2f2f;
-}
-
-.view-btn {
-  border: 0;
-  border-radius: 4px;
-  font-weight: 600;
-  padding: 0.45rem 0.8rem;
-  background-color: #3178c6;
-  color: white;
-  cursor: pointer;
-}
-
-.view-btn[disabled] { background-color: #999; cursor: not-allowed; }
-
-/* Cuerpo hint */
-.cuerpo23-click-hint {
-  position: absolute;
-  left: 0;
-  top: 0;
   transform: translate(-50%, -100%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 16px;
-  background: rgba(35, 37, 40, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 700;
-  opacity: 0;
-  pointer-events: none;
-  z-index: 20;
-  transition: opacity 0.24s ease, transform 0.24s ease;
-}
+  z-index: 11;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+  user-select: none;
+  white-space: nowrap;
 
-.cuerpo23-click-hint.visible { opacity: 1; transform: translate(-50%, -110%); }
+  &:hover {
+    transform: translate(-50%, -110%) scale(1.08);
+  }
 
-.cuerpo23-click-hint-arrow { font-size: 16px; line-height: 1; }
+  &.marker-building {
+    background: rgba(0, 0, 0, 0.85);
+    border: 1px solid rgba(255, 122, 0, 0.6);
+    color: #ff9d42;
 
-/* Marker cards */
-.marker { position: absolute; z-index: 5; }
-.marker__btn { border: 0; background: transparent; cursor: pointer; }
-.marker__card { position: absolute; background: rgba(255,255,255,0.98); color: #111; padding: 8px 10px; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
-.marker__nombre { font-weight:700; margin:0 0 4px; }
-.marker__desc { margin:0; font-size:12px; }
+    &:hover {
+      background: #ff7a00;
+      color: #ffffff;
+    }
+  }
 
+  &.marker-poi {
+    background: rgba(18, 24, 38, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #ffffff;
 
-@media (max-width: 768px) {
-  .zoom-controls {
-    display: none;
+    &:hover {
+      border-color: #ff7a00;
+      color: #ff9d42;
+    }
   }
 }

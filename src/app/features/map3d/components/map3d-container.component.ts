@@ -246,12 +246,63 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    const info = await this.mapNavService.getLocationInfoByMeshNameAsync(meshName.replace(/[^a-z0-9]/gi, '').toLowerCase());
+    const normalizedMeshName = meshName.replace(/[^a-z0-9]/gi, '').toLowerCase();
+    this.focusOnMeshIfNeeded(meshName);
+
+    const info = await this.mapNavService.getLocationInfoByMeshNameAsync(normalizedMeshName);
     if (info) {
       this.selectedLocationInfo = info;
       this.isDetailPanelOpen = true;
       this.cd.detectChanges();
     }
+  }
+
+  private focusOnMeshIfNeeded(meshName: string): void {
+    // Normalización agresiva: quita todo lo que no sea letra o número
+    // (esto maneja casos como "Cuerpo10 (3)" -> "cuerpo10")
+    const baseNameMatch = (meshName || '').match(/^[a-zA-Z]+\d+/);
+    const normalizedMeshName = baseNameMatch
+      ? baseNameMatch[0].toLowerCase()
+      : (meshName || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+
+    const focusableBodies = ['cuerpo1', 'cuerpo2', 'cuerpo3', 'cuerpo9', 'cuerpo10', 'cuerpo12', 'cuerpo20', 'cuerpo26'];
+    const shouldFocus = this.currentBuilding === 'A'
+      && this.currentFloor === this.firstFloorModel
+      && focusableBodies.includes(normalizedMeshName);
+
+    if (!shouldFocus) {
+      return;
+    }
+
+    this.babylonSceneService.focusOnMesh(meshName, 16);
+  }
+
+  private animateCameraFocus(targetVector: BABYLON.Vector3, targetOrthoSize: number, durationMs = 700): void {
+    if (!this.camera) return;
+
+    const startTarget = this.camera.target.clone();
+    const startOrthoSize = this.orthoSize;
+    const startTime = performance.now();
+
+    const animateStep = () => {
+      const elapsed = performance.now() - startTime;
+      const t = Math.min(elapsed / durationMs, 1);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out
+
+      if (this.camera) {
+        const newTarget = BABYLON.Vector3.Lerp(startTarget, targetVector, eased);
+        this.camera.setTarget(newTarget);
+      }
+
+      this.orthoSize = startOrthoSize + (targetOrthoSize - startOrthoSize) * eased;
+      this.updateOrthoCamera();
+
+      if (t < 1) {
+        requestAnimationFrame(animateStep);
+      }
+    };
+
+    requestAnimationFrame(animateStep);
   }
 
   private switchFloorByPisoName(pisoStr: string, edificio?: BuildingId): void {

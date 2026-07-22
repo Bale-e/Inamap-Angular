@@ -362,6 +362,39 @@ export class BabylonSceneService implements OnDestroy {
     this.camera.radius = 25;
   }
 
+  public focusOnMesh(meshName: string, targetRadius = 6, durationMs = 700): void {
+    if (!this.camera || !this.scene) return;
+
+    const targetMesh = this.scene.getMeshByName(meshName);
+    if (!targetMesh) return;
+
+    targetMesh.computeWorldMatrix(true);
+    targetMesh.refreshBoundingInfo({});
+    const boundingInfo = targetMesh.getBoundingInfo();
+    const targetPosition = boundingInfo.boundingBox.centerWorld.clone();
+
+    const startTarget = this.camera.target.clone();
+    const startRadius = this.camera.radius;
+    const startTime = performance.now();
+
+    const animateStep = () => {
+      if (!this.camera) return;
+      const elapsed = performance.now() - startTime;
+      const t = Math.min(elapsed / durationMs, 1);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out
+
+      const newTarget = BABYLON.Vector3.Lerp(startTarget, targetPosition, eased);
+      this.camera.target = newTarget;
+      this.camera.radius = startRadius + (targetRadius - startRadius) * eased;
+
+      if (t < 1) {
+        requestAnimationFrame(animateStep);
+      }
+    };
+
+    requestAnimationFrame(animateStep);
+  }
+
   public dispose(): void {
     if (this.engine) {
       this.engine.stopRenderLoop();

@@ -109,6 +109,30 @@ describe('Map3dContainerComponent camera focus sizing', () => {
     expect((component as any).calculateOrthoSizeForFocus(1.2)).toBe(6);
     expect((component as any).calculateOrthoSizeForFocus(12)).toBeGreaterThan(6);
   });
+
+  it('should zoom in when clicking body 3 on building A first floor', () => {
+    const component = Map3dContainerComponent.createForTest(
+      {} as Firebase,
+      { run: (fn: () => unknown) => fn() } as NgZone,
+      { detectChanges: () => undefined } as ChangeDetectorRef
+    );
+
+    (component as any).currentBuilding = 'A';
+    (component as any).currentFloor = (component as any).firstFloorModel;
+    const targetCalls: any[] = [];
+    (component as any).camera = {
+      setTarget: (target: any) => targetCalls.push(target)
+    };
+    (component as any).scene = {
+      getMeshByName: () => ({ getAbsolutePosition: () => ({ x: 3, y: 0, z: 4 }) })
+    };
+
+    (component as any).focusOnMeshIfNeeded('cuerpo3');
+
+    expect(component.orthoSize).toBe(17);
+    expect(targetCalls.length).toBe(1);
+    expect(targetCalls[0]).toEqual(jasmine.objectContaining({ x: 3, y: 0, z: 4 }));
+  });
 });
 
 describe('Map3dContainerComponent viewport wheel handling', () => {

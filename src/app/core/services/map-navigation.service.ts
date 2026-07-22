@@ -32,6 +32,75 @@ export class MapNavigationService {
     'cuerpo20': { nombre: 'Sala A106', desc: 'Espacio académico del Edificio A, piso 1.' }
   };
 
+  private getFloorSpecificInfo(meshName: string): SelectedLocationInfo | null {
+    const normalizedMeshName = (meshName || '').replace(/\s+/g, '').toLowerCase();
+    const floorText = this.currentFloorSubject.value.toLowerCase();
+    const isSecondFloor = floorText.includes('piso2') || floorText.includes('2');
+    const isThirdFloor = floorText.includes('piso3') || floorText.includes('3');
+
+    const overrides: Record<string, { firstFloor?: SelectedLocationInfo; secondFloor?: SelectedLocationInfo; thirdFloor?: SelectedLocationInfo }> = {
+      cuerpo20: {
+        firstFloor: { nombre: 'Sala A106', desc: 'Espacio académico del Edificio A, piso 1.' },
+        secondFloor: { nombre: 'Sala A202', desc: 'Espacio académico del Edificio A, piso 2.' },
+        thirdFloor: { nombre: 'Sala A309', desc: 'Espacio académico del Edificio A, piso 3.' }
+      },
+      cuerpo3: {
+        firstFloor: { nombre: 'Sala A101', desc: 'Espacio académico del Edificio A, piso 1.' },
+        secondFloor: { nombre: 'Sala A216', desc: 'Espacio académico del Edificio A, piso 2.' },
+        thirdFloor: { nombre: 'Sala A311', desc: 'Espacio académico del Edificio A, piso 3.' }
+      },
+      cuerpo1: {
+        secondFloor: { nombre: 'Sala A218', desc: 'Espacio académico del Edificio A, piso 2.' },
+        thirdFloor: { nombre: 'Sala A308', desc: 'Espacio académico del Edificio A, piso 3.' }
+      },
+      cuerpo13: {
+        secondFloor: { nombre: 'Sala 203', desc: 'Espacio académico del Edificio A, piso 2.' },
+        thirdFloor: { nombre: 'Baño de Dama', desc: 'Espacio académico del Edificio A, piso 3.' }
+      },
+      cuerpo10: { thirdFloor: { nombre: 'Sala A302', desc: 'Espacio académico del Edificio A, piso 3.' } },
+      cuerpo11: {
+        secondFloor: { nombre: 'Sala A213', desc: 'Espacio académico del Edificio A, piso 2.' },
+        thirdFloor: { nombre: 'Sala A306', desc: 'Espacio académico del Edificio A, piso 3.' }
+      },
+      cuerpo12: {
+        secondFloor: { nombre: 'Sala A207', desc: 'Espacio académico del Edificio A, piso 2.' },
+        thirdFloor: { nombre: 'Sala A310', desc: 'Espacio académico del Edificio A, piso 3.' }
+      },
+      cuerpo7: {
+        secondFloor: { nombre: 'Sala A209', desc: 'Espacio académico del Edificio A, piso 2.' },
+        thirdFloor: { nombre: 'Sala A318', desc: 'Espacio académico del Edificio A, piso 3.' }
+      },
+      cuerpo21: { thirdFloor: { nombre: 'Sala A301', desc: 'Espacio académico del Edificio A, piso 3.' } },
+      cuerpo23: { thirdFloor: { nombre: 'Sala A312', desc: 'Espacio académico del Edificio A, piso 3.' } },
+      cuerpo55: {
+        secondFloor: { nombre: 'Sala A208', desc: 'Espacio académico del Edificio A, piso 2.' },
+        thirdFloor: { nombre: 'Sala A314', desc: 'Espacio académico del Edificio A, piso 3.' }
+      },
+      cuerpo19: { secondFloor: { nombre: 'Sala A205', desc: 'Espacio académico del Edificio A, piso 2.' } },
+      cuerpo18: { secondFloor: { nombre: 'Sala A215', desc: 'Espacio académico del Edificio A, piso 2.' } },
+      cuerpo2: { thirdFloor: { nombre: 'Baño de Varones', desc: 'Espacio académico del Edificio A, piso 3.' } },
+      cuerpo15: { secondFloor: { nombre: 'Sala A204', desc: 'Espacio académico del Edificio A, piso 2.' } },
+      cuerpo17: {
+        firstFloor: { nombre: 'Sala A113', desc: 'Espacio académico del Edificio A, piso 1.' },
+        secondFloor: { nombre: 'Sala A206', desc: 'Espacio académico del Edificio A, piso 2.' }
+      },
+      cuerpo9: {
+        secondFloor: { nombre: 'Sala A2010', desc: 'Espacio académico del Edificio A, piso 2.' },
+        thirdFloor: { nombre: 'Sala A311', desc: 'Espacio académico del Edificio A, piso 3.' }
+      }
+    };
+
+    const override = overrides[normalizedMeshName];
+    if (!override) {
+      return null;
+    }
+
+    if (isThirdFloor) {
+      return override.thirdFloor ?? null;
+    }
+    return isSecondFloor ? override.secondFloor ?? null : override.firstFloor ?? null;
+  }
+
   constructor(private firebaseService: Firebase) {}
 
   public setBuilding(building: BuildingId): void {
@@ -50,7 +119,8 @@ export class MapNavigationService {
 
   public async getLocationInfoByMeshNameAsync(meshName: string): Promise<SelectedLocationInfo | null> {
     const normalizedMeshName = (meshName || '').replace(/\s+/g, '');
-    const infoDataEntry = this.infoDataMap[meshName] || this.infoDataMap[normalizedMeshName] || this.infoDataMap[normalizedMeshName.toLowerCase()];
+    const floorSpecificInfo = this.getFloorSpecificInfo(meshName);
+    const infoDataEntry = floorSpecificInfo || this.infoDataMap[meshName] || this.infoDataMap[normalizedMeshName] || this.infoDataMap[normalizedMeshName.toLowerCase()];
     if (infoDataEntry) {
       return infoDataEntry;
     }
@@ -103,6 +173,10 @@ export class MapNavigationService {
   }
 
   public getLocationInfoByMeshName(meshName: string): SelectedLocationInfo | null {
+    const floorSpecificInfo = this.getFloorSpecificInfo(meshName);
+    if (floorSpecificInfo) {
+      return floorSpecificInfo;
+    }
     if (this.infoDataMap[meshName]) {
       return this.infoDataMap[meshName];
     }

@@ -265,7 +265,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       ? baseNameMatch[0].toLowerCase()
       : (meshName || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
 
-    const focusableBodies = ['cuerpo1', 'cuerpo2', 'cuerpo3', 'cuerpo9', 'cuerpo10', 'cuerpo12', 'cuerpo20', 'cuerpo26'];
+    const focusableBodies = ['cuerpo1', 'cuerpo2', 'cuerpo3', 'cuerpo4','cuerpo5', 'cuerpo6', 'cuerpo7','cuerpo9', 'cuerpo10', 'cuerpo12', 'cuerpo13', 'cuerpo15','cuerpo16', 'cuerpo17', 'cuerpo18','cuerpo20', 'cuerpo26', 'cuerpo27', 'cuerpo28', 'cuerpo29', 'cuerpo30'];
     const shouldFocus = this.currentBuilding === 'A'
       && this.currentFloor === this.firstFloorModel
       && focusableBodies.includes(normalizedMeshName);

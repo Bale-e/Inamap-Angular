@@ -1,4 +1,5 @@
-const BASE_URL = 'http://localhost:3000'
+const RAW_BASE_URL = 'https://api.inago.inacode.cl'
+const BASE_URL = RAW_BASE_URL.replace(/\/$/, '')
 
 // ── EDIFICIOS ──────────────────────────────────────────────
 export async function getEdificios() {

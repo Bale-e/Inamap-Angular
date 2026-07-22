@@ -29,6 +29,13 @@ export class BabylonSceneService implements OnDestroy {
 
   private onMarkersUpdatedCb?: (markers: ScreenMarker[]) => void;
 
+  // Propiedades para rotación continua de presentación y zoom sutil
+  private isAutoRotateEnabled = true;
+  private isUserInteracting = false;
+  private idleTimer: any = null;
+  private baseRadius = 77;
+  private zoomTime = 0;
+
   constructor(private ngZone: NgZone) {}
 
   public initScene(
@@ -60,6 +67,7 @@ export class BabylonSceneService implements OnDestroy {
     this.setupSkybox();
 
     this.scene.onPointerDown = (evt, pickResult) => {
+      this.registerUserInteraction();
       if (evt.button === 0 && pickResult.hit && pickResult.pickedMesh) {
         if (onMeshClicked) {
           onMeshClicked(pickResult.pickedMesh.name, pickResult);
@@ -71,6 +79,7 @@ export class BabylonSceneService implements OnDestroy {
       this.engine?.runRenderLoop(() => {
         this.scene?.render();
         this.updateScreenMarkers();
+        this.handleAutoRotation();
       });
     });
 
@@ -91,6 +100,62 @@ export class BabylonSceneService implements OnDestroy {
     this.camera.lowerRadiusLimit = 2;
     this.camera.upperRadiusLimit = 200;
     this.camera.attachControl(canvas, true);
+
+    const onInteraction = () => this.registerUserInteraction();
+    canvas.addEventListener('pointerdown', onInteraction);
+    canvas.addEventListener('pointermove', (e) => {
+      if (e.buttons > 0) onInteraction();
+    });
+    canvas.addEventListener('wheel', onInteraction, { passive: true });
+    canvas.addEventListener('touchstart', onInteraction, { passive: true });
+    canvas.addEventListener('touchmove', onInteraction, { passive: true });
+  }
+
+  public registerUserInteraction(): void {
+    this.isUserInteracting = true;
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+    if (this.camera) {
+      this.baseRadius = this.camera.radius;
+    }
+    this.idleTimer = setTimeout(() => {
+      this.isUserInteracting = false;
+      if (this.camera) {
+        this.baseRadius = this.camera.radius;
+      }
+    }, 2500);
+  }
+
+  private handleAutoRotation(): void {
+    if (!this.camera || !this.isAutoRotateEnabled) return;
+
+    const isSede = this.currentBuilding === 'S' || this.currentFloorModel === 'MODELO_INACAP_FIXED.obj';
+    if (!isSede) return;
+
+    const hasInertia =
+      Math.abs(this.camera.inertialAlphaOffset) > 0.0001 ||
+      Math.abs(this.camera.inertialBetaOffset) > 0.0001 ||
+      Math.abs(this.camera.inertialRadiusOffset) > 0.0001 ||
+      Math.abs(this.camera.inertialPanningX) > 0.0001 ||
+      Math.abs(this.camera.inertialPanningY) > 0.0001;
+
+    if (this.isUserInteracting || hasInertia) {
+      this.baseRadius = this.camera.radius;
+      return;
+    }
+
+    // Rotación lenta y constante de la cámara (presentación)
+    this.camera.alpha += 0.0015;
+
+    // Leves oscilaciones de zoom in y zoom out (efecto respiración suave)
+    this.zoomTime += 0.015;
+    const zoomOscillation = Math.sin(this.zoomTime * 0.7) * 2.5;
+
+    const minR = this.camera.lowerRadiusLimit ?? 5;
+    const maxR = this.camera.upperRadiusLimit ?? 150;
+    this.camera.radius = Math.max(minR, Math.min(maxR, this.baseRadius + zoomOscillation));
   }
 
   private setupLights(): void {
@@ -228,14 +293,18 @@ export class BabylonSceneService implements OnDestroy {
           this.camera.radius = 77;
           this.camera.alpha = -Math.PI / 2;
           this.camera.beta = 1.25;
+          this.baseRadius = 77;
+          this.zoomTime = 0;
         } else if (isBuildingB) {
           this.camera.radius = 36.4;
           this.camera.alpha = Math.PI / 4;
           this.camera.beta = Math.PI / 3;
+          this.baseRadius = 36.4;
         } else {
           this.camera.radius = 36.4;
           this.camera.alpha = Math.PI / 4;
           this.camera.beta = Math.PI / 3;
+          this.baseRadius = 36.4;
         }
       }
     } catch (err) {
@@ -429,11 +498,15 @@ export class BabylonSceneService implements OnDestroy {
   public zoomIn(): void {
     if (!this.camera) return;
     this.camera.radius = Math.max(4, this.camera.radius - 3);
+    this.baseRadius = this.camera.radius;
+    this.registerUserInteraction();
   }
 
   public zoomOut(): void {
     if (!this.camera) return;
     this.camera.radius = Math.min(200, this.camera.radius + 3);
+    this.baseRadius = this.camera.radius;
+    this.registerUserInteraction();
   }
 
   public resetCamera(): void {
@@ -441,7 +514,9 @@ export class BabylonSceneService implements OnDestroy {
     this.camera.target = new BABYLON.Vector3(0, 0, 0);
     this.camera.alpha = Math.PI / 4;
     this.camera.beta = Math.PI / 3;
-    this.camera.radius = this.currentBuilding === 'A' ? 52 : 25;
+    this.camera.radius = this.currentBuilding === 'A' ? 52 : (this.currentBuilding === 'S' ? 77 : 25);
+    this.baseRadius = this.camera.radius;
+    this.registerUserInteraction();
   }
 
   public focusOnMesh(meshName: string, targetRadius = 6, durationMs = 700): void {
@@ -513,6 +588,10 @@ export class BabylonSceneService implements OnDestroy {
   }
 
   public dispose(): void {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
     if (this.engine) {
       this.engine.stopRenderLoop();
       this.engine.dispose();

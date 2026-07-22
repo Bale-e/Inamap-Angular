@@ -247,6 +247,13 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     }
 
     const normalizedMeshName = meshName.replace(/[^a-z0-9]/gi, '').toLowerCase();
+    if (/^cuerpo\d+/.test(normalizedMeshName)) {
+      // No mostrar panel de detalle para clics en cuerpos.
+      this.closeDetailPanel();
+      if (this.infoBox) this.infoBox.style.display = 'none';
+      return;
+    }
+
     this.focusOnMeshIfNeeded(meshName);
 
     const info = await this.mapNavService.getLocationInfoByMeshNameAsync(normalizedMeshName);
@@ -265,7 +272,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       ? baseNameMatch[0].toLowerCase()
       : (meshName || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
 
-    const focusableBodies = ['cuerpo1', 'cuerpo2', 'cuerpo3', 'cuerpo4','cuerpo5', 'cuerpo6', 'cuerpo7','cuerpo9', 'cuerpo10', 'cuerpo12', 'cuerpo13', 'cuerpo15','cuerpo16', 'cuerpo17', 'cuerpo18','cuerpo20', 'cuerpo26', 'cuerpo27', 'cuerpo28', 'cuerpo29', 'cuerpo30'];
+    const focusableBodies = ['cuerpo1', 'cuerpo2', 'cuerpo3', 'cuerpo4','cuerpo5', 'cuerpo6', 'cuerpo7','cuerpo9', 'cuerpo10', 'cuerpo11', 'cuerpo12', 'cuerpo13', 'cuerpo15','cuerpo16', 'cuerpo17', 'cuerpo18','cuerpo20', 'cuerpo24', 'cuerpo26', 'cuerpo27', 'cuerpo28', 'cuerpo29', 'cuerpo30'];
     const shouldFocus = this.currentBuilding === 'A'
       && this.currentFloor === this.firstFloorModel
       && focusableBodies.includes(normalizedMeshName);
@@ -274,7 +281,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    this.babylonSceneService.focusOnMesh(meshName, 16);
+    this.babylonSceneService.focusOnMesh(meshName, 30);
   }
 
   private animateCameraFocus(targetVector: BABYLON.Vector3, targetOrthoSize: number, durationMs = 700): void {
@@ -1040,39 +1047,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
             && /^cuerpo/i.test(normalizedMeshName)
             && !(this.currentFloor === this.buildingBThirdFloorModel && excludedBuildingBThirdFloorDetailBodies.includes(normalizedMeshName));
 
-          if (isFirstFloorBodyDetailTrigger) {
+          if (isFirstFloorBodyDetailTrigger || isSecondFloorBodyDetailTrigger || isThirdFloorBodyDetailTrigger) {
             this.closeFloorDialog();
-            this.openDetailPanel(
-              this.formatBodyPanelTitle(normalizedMeshName),
-              `<div class="detail-panel__body-content">
-                <p class="detail-panel__eyebrow">Piso 1 · Acceso</p>
-                <p class="detail-panel__text">Este espacio puede mostrar información, indicaciones o accesos rápidos para ${this.formatBodyPanelTitle(normalizedMeshName)}.</p>
-              </div>`
-            );
-            if (this.infoBox) {
-              this.infoBox.style.display = 'none';
-            }
-          } else if (isSecondFloorBodyDetailTrigger) {
-            this.closeFloorDialog();
-            this.openDetailPanel(
-              this.formatBodyPanelTitle(normalizedMeshName),
-              `<div class="detail-panel__body-content">
-                <p class="detail-panel__eyebrow">Piso 2 · Acceso</p>
-                <p class="detail-panel__text">Este espacio puede mostrar información, indicaciones o accesos rápidos para ${this.formatBodyPanelTitle(normalizedMeshName)}.</p>
-              </div>`
-            );
-            if (this.infoBox) {
-              this.infoBox.style.display = 'none';
-            }
-          } else if (isThirdFloorBodyDetailTrigger) {
-            this.closeFloorDialog();
-            this.openDetailPanel(
-              this.formatBodyPanelTitle(normalizedMeshName),
-              `<div class="detail-panel__body-content">
-                <p class="detail-panel__eyebrow">Piso 3 · Acceso</p>
-                <p class="detail-panel__text">Este espacio puede mostrar información, indicaciones o accesos rápidos para ${this.formatBodyPanelTitle(normalizedMeshName)}.</p>
-              </div>`
-            );
+            this.closeDetailPanel();
             if (this.infoBox) {
               this.infoBox.style.display = 'none';
             }

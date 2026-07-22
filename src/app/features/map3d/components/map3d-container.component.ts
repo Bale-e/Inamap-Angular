@@ -190,7 +190,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     if (this.renderCanvasContainer?.nativeElement) {
       this.babylonSceneService.initScene(
         this.renderCanvasContainer.nativeElement,
-        (meshName) => this.onMeshPicked(meshName),
+        (meshName, pickResult) => this.onMeshPicked(meshName, pickResult),
         (markers) => this.onMarkersUpdated(markers)
       );
     }
@@ -236,7 +236,56 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  async onMeshPicked(meshName: string): Promise<void> {
+  async onMeshPicked(meshName: string, pickResult?: any): Promise<void> {
+    const normalizedMeshName = meshName.replace(/[^a-z0-9]/gi, '').toLowerCase();
+
+    const isSede =
+      this.currentBuilding === 'S' ||
+      this.currentFloor === this.sedeModel ||
+      normalizedMeshName.includes('sede') ||
+      normalizedMeshName.includes('untitled') ||
+      normalizedMeshName.includes('fixed');
+
+    if (isSede) {
+      // 1. Extraer número de cuerpo del nombre de la malla si viene explícito
+      const meshMatch = normalizedMeshName.match(/^cuerpo(\d+)/i);
+      let cuerpoNombre = meshMatch ? `Cuerpo ${meshMatch[1]}` : null;
+
+      // 2. Si es una malla genérica (ej. Untitled_fixed.stl), buscar el Cuerpo más cercano por coordenadas 3D
+      if (!cuerpoNombre && pickResult && pickResult.pickedPoint) {
+        const infoSede = await this.mapNavService.findNearestLocationByCoords(pickResult.pickedPoint, 'S');
+        if (infoSede && infoSede.nombre) {
+          cuerpoNombre = infoSede.nombre;
+        }
+      }
+
+      if (cuerpoNombre) {
+        console.log('Cuerpo seleccionado:', cuerpoNombre);
+      } else {
+        console.log('Cuerpo seleccionado: no detectado');
+      }
+
+      // No abrir tarjetas de salas ni cuadros emergentes para el mapa de la Sede
+      this.closeDetailPanel();
+      if (this.infoBox) this.infoBox.style.display = 'none';
+      return;
+    }
+
+    // ── Para Pisos de Edificio A y Edificio B ──
+    const match = normalizedMeshName.match(/^cuerpo(\d+)/i);
+    const cuerpoPrefix = match ? `Cuerpo ${match[1]}` : null;
+
+    const info = await this.mapNavService.getLocationInfoByMeshNameAsync(normalizedMeshName);
+    const salaNombre = info?.nombre;
+
+    if (cuerpoPrefix && salaNombre) {
+      console.log(`Cuerpo seleccionado: ${cuerpoPrefix} (${salaNombre})`);
+    } else if (cuerpoPrefix) {
+      console.log(`Cuerpo seleccionado: ${cuerpoPrefix}`);
+    } else if (salaNombre) {
+      console.log(`Cuerpo seleccionado: ${salaNombre}`);
+    }
+
     // Si este mesh es un disparador del selector de piso (ej. escaleras),
     // abrir el selector de piso y no mostrar el panel de detalle de ubicación.
     if (this.isFloorSelectionTrigger(meshName)) {
@@ -246,21 +295,15 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    const normalizedMeshName = meshName.replace(/[^a-z0-9]/gi, '').toLowerCase();
-    if (/^cuerpo\d+/.test(normalizedMeshName)) {
-      // No mostrar panel de detalle para clics en cuerpos.
-      this.closeDetailPanel();
-      if (this.infoBox) this.infoBox.style.display = 'none';
-      return;
-    }
-
     this.focusOnMeshIfNeeded(meshName);
 
-    const info = await this.mapNavService.getLocationInfoByMeshNameAsync(normalizedMeshName);
     if (info) {
       this.selectedLocationInfo = info;
       this.isDetailPanelOpen = true;
       this.cd.detectChanges();
+    } else {
+      this.closeDetailPanel();
+      if (this.infoBox) this.infoBox.style.display = 'none';
     }
   }
 
@@ -339,7 +382,25 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       }
       this.destinationCoordinatesText = result.statusText;
       this.babylonSceneService.setDestinationMarker(result.coord);
-      this.babylonSceneService.drawAnimatedRoute(result.routePoints);
+
+      // Los routePoints de buildRoute contienen coordenadas en el espacio local del modelo OBJ
+      // (exactamente como están almacenadas en Firestore). Se deben transformar a espacio mundo
+      // usando localToWorld() para que las flechas se dibujen dentro del pasillo correcto.
+      //
+      // Excepción: el último punto puede haber sido obtenido con getMeshWorldPosition() y ya
+      // estará en espacio mundo. En ese caso usamos result.coord directamente (que ES el
+      // meshPos / destino final ya transformado).
+      const rawPoints = result.routePoints;
+      const worldPoints = rawPoints.map((pt, i) => {
+        if (i === rawPoints.length - 1) {
+          // El punto final es el destino — result.coord ya está en espacio mundo
+          return result.coord.clone();
+        }
+        // Puntos intermedios (Accesos, Giros de navigation-paths) → transformar local→mundo
+        return this.babylonSceneService.localToWorld(pt);
+      });
+
+      this.babylonSceneService.drawAnimatedRoute(worldPoints);
     } else {
       this.destinationCoordinatesText = `No se encontró la locación '${destinationName}'.`;
     }
@@ -376,18 +437,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           ? this.secondFloorModel
           : this.thirdFloorModel;
 
+    this.currentFloor = targetFloor;
     this.mapNavService.setFloor(targetFloor);
-
-    if (this.currentFloor !== targetFloor) {
-      this.currentFloor = targetFloor;
-      if (this.viewMode === '3d') {
-        this.init3dScene();
-      }
-    }
-
-    if (this.viewMode !== '3d') {
-      this.setView('3d');
-    }
   }
 
   closeFloorDialog(): void {
@@ -435,100 +486,51 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
   private goToBuildingBFirstFloor(): void {
     this.currentBuilding = 'B';
-    if (this.currentFloor !== this.buildingBFirstFloorModel) {
-      this.currentFloor = this.buildingBFirstFloorModel;
-      if (this.viewMode === '3d') {
-        this.init3dScene();
-      }
-    }
-
-    if (this.viewMode !== '3d') {
-      this.setView('3d');
-    }
+    this.currentFloor = this.buildingBFirstFloorModel;
+    this.mapNavService.setBuilding('B');
+    this.mapNavService.setFloor(this.buildingBFirstFloorModel);
   }
 
   private goToBuildingBSecondFloor(): void {
     this.currentBuilding = 'B';
-    if (this.currentFloor !== this.buildingBSecondFloorModel) {
-      this.currentFloor = this.buildingBSecondFloorModel;
-      if (this.viewMode === '3d') {
-        this.init3dScene();
-      }
-    }
-
-    if (this.viewMode !== '3d') {
-      this.setView('3d');
-    }
+    this.currentFloor = this.buildingBSecondFloorModel;
+    this.mapNavService.setBuilding('B');
+    this.mapNavService.setFloor(this.buildingBSecondFloorModel);
   }
 
   private goToBuildingBThirdFloor(): void {
     this.currentBuilding = 'B';
-    if (this.currentFloor !== this.buildingBThirdFloorModel) {
-      this.currentFloor = this.buildingBThirdFloorModel;
-      if (this.viewMode === '3d') {
-        this.init3dScene();
-      }
-    }
-
-    if (this.viewMode !== '3d') {
-      this.setView('3d');
-    }
+    this.currentFloor = this.buildingBThirdFloorModel;
+    this.mapNavService.setBuilding('B');
+    this.mapNavService.setFloor(this.buildingBThirdFloorModel);
   }
 
   private goToBuildingAFirstFloor(): void {
     this.currentBuilding = 'A';
-    if (this.currentFloor !== this.firstFloorModel) {
-      this.currentFloor = this.firstFloorModel;
-      if (this.viewMode === '3d') {
-        this.init3dScene();
-      }
-    }
-
-    if (this.viewMode !== '3d') {
-      this.setView('3d');
-    }
+    this.currentFloor = this.firstFloorModel;
+    this.mapNavService.setBuilding('A');
+    this.mapNavService.setFloor(this.firstFloorModel);
   }
 
   private goToBuildingASecondFloor(): void {
     this.currentBuilding = 'A';
-    if (this.currentFloor !== this.secondFloorModel) {
-      this.currentFloor = this.secondFloorModel;
-      if (this.viewMode === '3d') {
-        this.init3dScene();
-      }
-    }
-
-    if (this.viewMode !== '3d') {
-      this.setView('3d');
-    }
+    this.currentFloor = this.secondFloorModel;
+    this.mapNavService.setBuilding('A');
+    this.mapNavService.setFloor(this.secondFloorModel);
   }
 
   private goToBuildingAThirdFloor(): void {
     this.currentBuilding = 'A';
-    if (this.currentFloor !== this.thirdFloorModel) {
-      this.currentFloor = this.thirdFloorModel;
-      if (this.viewMode === '3d') {
-        this.init3dScene();
-      }
-    }
-
-    if (this.viewMode !== '3d') {
-      this.setView('3d');
-    }
+    this.currentFloor = this.thirdFloorModel;
+    this.mapNavService.setBuilding('A');
+    this.mapNavService.setFloor(this.thirdFloorModel);
   }
 
   private goToSede(): void {
     this.currentBuilding = 'S';
-    if (this.currentFloor !== this.sedeModel) {
-      this.currentFloor = this.sedeModel;
-      if (this.viewMode === '3d') {
-        this.init3dScene();
-      }
-    }
-
-    if (this.viewMode !== '3d') {
-      this.setView('3d');
-    }
+    this.currentFloor = this.sedeModel;
+    this.mapNavService.setBuilding('S');
+    this.mapNavService.setFloor(this.sedeModel);
   }
 
   public selectBuilding(building: 'A' | 'B'): void {
@@ -583,7 +585,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
   changeFloor(floor: string): void {
     this.currentFloor = floor;
-    if (this.viewMode === '3d') this.init3dScene();
+    this.mapNavService.setFloor(floor);
   }
 
   private init3dScene(): void {
@@ -1000,13 +1002,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
           if (isSedeMesh && !isGroundMesh) {
             this.closeFloorDialog();
-            this.openDetailPanel(
-              'Sede Inacap',
-              `<div class="detail-panel__body-content">
-                <p class="detail-panel__eyebrow">Mapa Principal · Sede Inacap</p>
-                <p class="detail-panel__text">Vista general del campus y terrenos de la Sede Inacap. Selecciona un edificio en el mapa o selector para explorar sus pisos y salas.</p>
-              </div>`
-            );
+            this.closeDetailPanel();
             if (this.infoBox) this.infoBox.style.display = 'none';
             return;
           }
@@ -1187,9 +1183,16 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     }
 
     if (mode === '3d') {
-      this.init3dScene();
+      if (this.renderCanvasContainer?.nativeElement) {
+        this.babylonSceneService.initScene(
+          this.renderCanvasContainer.nativeElement,
+          (meshName, pickResult) => this.onMeshPicked(meshName, pickResult),
+          (markers) => this.onMarkersUpdated(markers)
+        );
+        this.babylonSceneService.loadModel(this.currentFloor, this.currentBuilding);
+      }
     } else {
-      this.dispose3d();
+      this.babylonSceneService.dispose();
     }
 
     this.viewMode = mode;

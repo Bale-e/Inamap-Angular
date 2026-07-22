@@ -118,13 +118,11 @@ export class MapNavigationService {
 
   public async getLocationInfoByMeshNameAsync(meshName: string): Promise<SelectedLocationInfo | null> {
     const normalizedMeshName = (meshName || '').replace(/\s+/g, '').toLowerCase();
-    if (this.currentBuildingSubject.value === 'S' || normalizedMeshName.includes('untitled') || normalizedMeshName.includes('fixed') || normalizedMeshName.includes('sede')) {
-      return {
-        nombre: 'Sede Inacap',
-        desc: 'Vista general de la sede Inacap y mapa principal del campus.',
-        edificio: 'S',
-        piso: 'General'
-      };
+    const isBackgroundMesh = (normalizedMeshName.includes('untitled') || normalizedMeshName.includes('fixed') || normalizedMeshName.includes('sede') || normalizedMeshName === 'ground' || normalizedMeshName === 'suelo')
+      && !/^cuerpo\d+/i.test(normalizedMeshName);
+
+    if (isBackgroundMesh) {
+      return null;
     }
     const floorSpecificInfo = this.getFloorSpecificInfo(meshName);
     const infoDataEntry = floorSpecificInfo || this.infoDataMap[meshName] || this.infoDataMap[normalizedMeshName] || this.infoDataMap[normalizedMeshName.toLowerCase()];
@@ -147,8 +145,8 @@ export class MapNavigationService {
           if (locCuerpo === cuerpoNum || parseInt(locCuerpo, 10) === cuerpoNum) {
             const locBuilding = (loc._edificioId || loc.Edificio || loc.edificio || '').toString().toLowerCase();
             const locFloor = (loc.Piso || loc.piso || '').toString().toLowerCase().replace(/\s+/g, '');
-            const matchBuilding = locBuilding.includes(currentBld.toLowerCase()) || locBuilding === currentBld.toLowerCase();
-            const matchFloor = currentFloor.replace(/\s+/g, '').includes(locFloor) || locFloor.includes(currentFloor.replace(/\s+/g, ''));
+            const matchBuilding = currentBld === 'S' || locBuilding.includes(currentBld.toLowerCase()) || locBuilding === currentBld.toLowerCase();
+            const matchFloor = currentBld === 'S' || currentFloor.replace(/\s+/g, '').includes(locFloor) || locFloor.includes(currentFloor.replace(/\s+/g, ''));
             return matchBuilding && matchFloor;
           }
           return false;
@@ -160,8 +158,8 @@ export class MapNavigationService {
           const floorStr = found.Piso || found.piso || 'Piso 1';
           return {
             nombre: name,
-            desc: `${tipo} — Ubicado en Edificio ${currentBld}, ${floorStr}.`,
-            edificio: currentBld,
+            desc: `${tipo} — Ubicado en Edificio ${found.Edificio || currentBld}, ${floorStr}.`,
+            edificio: found.Edificio || currentBld,
             piso: floorStr
           };
         }
@@ -179,15 +177,63 @@ export class MapNavigationService {
     return null;
   }
 
+  public async findNearestLocationByCoords(point: any, buildingFilter?: string, maxDistance = 80): Promise<SelectedLocationInfo | null> {
+    try {
+      if (this.cachedLocations.length === 0) {
+        this.cachedLocations = await this.firebaseService.getLocacionesDeTodosLosEdificios();
+      }
+
+      let nearestLoc: any = null;
+      let minDistance = Infinity;
+
+      for (const loc of this.cachedLocations) {
+        if (buildingFilter === 'S') {
+          const locBuilding = (loc._edificioId || loc.Edificio || loc.edificio || '').toString().toUpperCase();
+          if (locBuilding && locBuilding !== 'S' && locBuilding !== 'SEDE') {
+            if (!loc.Cuerpo && !loc.cuerpo) continue;
+          }
+        }
+
+        const vec = this.extractVec3(loc);
+        if (vec) {
+          const dist = BABYLON.Vector3.Distance(point, vec);
+          if (dist < minDistance && dist <= maxDistance) {
+            minDistance = dist;
+            nearestLoc = loc;
+          }
+        }
+      }
+
+      if (nearestLoc) {
+        const cuerpoNum = nearestLoc.Cuerpo ?? nearestLoc.cuerpo;
+        let name = nearestLoc.Nombre || nearestLoc.nombre;
+        if (buildingFilter === 'S' || !name) {
+          name = cuerpoNum ? `Cuerpo ${cuerpoNum}` : (name || 'Cuerpo Inacap');
+        }
+        const tipo = nearestLoc.Tipo || nearestLoc.tipo || 'Espacio académico';
+        const edificio = nearestLoc.Edificio || nearestLoc._edificioId || 'S';
+        const piso = nearestLoc.Piso || nearestLoc.piso || 'General';
+
+        return {
+          nombre: name,
+          desc: `${tipo} — ${edificio ? 'Edificio ' + edificio : 'Sede Inacap'}${piso ? ', ' + piso : ''}.`,
+          edificio,
+          piso
+        };
+      }
+    } catch (err) {
+      console.warn('Error al buscar locación cercana por coordenadas:', err);
+    }
+    return null;
+  }
+
   public getLocationInfoByMeshName(meshName: string): SelectedLocationInfo | null {
     const normalizedMeshName = (meshName || '').replace(/\s+/g, '').toLowerCase();
-    if (this.currentBuildingSubject.value === 'S' || normalizedMeshName.includes('untitled') || normalizedMeshName.includes('fixed') || normalizedMeshName.includes('sede')) {
-      return {
-        nombre: 'Sede Inacap',
-        desc: 'Vista general de la sede Inacap y mapa principal del campus.',
-        edificio: 'S',
-        piso: 'General'
-      };
+    const isBackgroundMesh = (normalizedMeshName.includes('untitled') || normalizedMeshName.includes('fixed') || normalizedMeshName.includes('sede') || normalizedMeshName === 'ground' || normalizedMeshName === 'suelo')
+      && !/^cuerpo\d+/i.test(normalizedMeshName);
+
+    if (isBackgroundMesh) {
+      return null;
     }
     const floorSpecificInfo = this.getFloorSpecificInfo(meshName);
     if (floorSpecificInfo) {

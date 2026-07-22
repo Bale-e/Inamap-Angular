@@ -61,7 +61,6 @@ export class BabylonSceneService implements OnDestroy {
 
     this.scene.onPointerDown = (evt, pickResult) => {
       if (evt.button === 0 && pickResult.hit && pickResult.pickedMesh) {
-        console.log('Mesh seleccionado:', pickResult.pickedMesh.name, 'Coordenadas:', pickResult.pickedPoint);
         if (onMeshClicked) {
           onMeshClicked(pickResult.pickedMesh.name, pickResult);
         }
@@ -123,9 +122,16 @@ export class BabylonSceneService implements OnDestroy {
     this.currentBuilding = buildingId;
 
     if (this.modelRoot) {
-      this.modelRoot.dispose();
+      this.modelRoot.dispose(false, true);
       this.modelRoot = null;
     }
+
+    // Disponer cualquier malla previa que no sea skybox o marcador
+    this.scene.meshes.slice().forEach(mesh => {
+      if (mesh.name !== 'skyBox' && !mesh.name.startsWith('dest') && mesh.name !== 'ground') {
+        mesh.dispose();
+      }
+    });
 
     this.clearGuideArrows();
     this.clearDestinationMarker();
@@ -149,6 +155,12 @@ export class BabylonSceneService implements OnDestroy {
 
       if (result.meshes.length === 0) return;
 
+      // Volver a limpiar por si otra llamada asíncrona dejó un modelRoot
+      if (this.modelRoot) {
+        this.modelRoot.dispose(false, true);
+        this.modelRoot = null;
+      }
+
       const allNodes = new BABYLON.TransformNode('modelRoot', this.scene);
       this.modelRoot = allNodes;
 
@@ -171,16 +183,59 @@ export class BabylonSceneService implements OnDestroy {
           defaultMat.diffuseColor = new BABYLON.Color3(0.85, 0.85, 0.9);
           mesh.material = defaultMat;
         }
+
+        const material: any = mesh.material;
+        if (material) {
+          material.emissiveColor = new BABYLON.Color3(0, 0, 0);
+          if ('specularColor' in material) {
+            material.specularColor = new BABYLON.Color3(0.03, 0.03, 0.03);
+          }
+          if ('ambientColor' in material) {
+            material.ambientColor = new BABYLON.Color3(0.04, 0.04, 0.04);
+          }
+          if ('metallic' in material) {
+            material.metallic = 0;
+          }
+          if ('roughness' in material) {
+            material.roughness = Math.min(1, Math.max(material.roughness ?? 1, 0.85));
+          }
+          if ('specularPower' in material) {
+            material.specularPower = 8;
+          }
+        }
       });
 
+      const bounds = allNodes.getHierarchyBoundingVectors(true);
+      const size = BABYLON.Vector3.Distance(bounds.min, bounds.max);
+      const targetSize = isSede ? 210 : 25;
+
+      if (size > 0) {
+        const scale = targetSize / size;
+        allNodes.scaling = new BABYLON.Vector3(scale, scale, scale);
+
+        const scaledBounds = allNodes.getHierarchyBoundingVectors(true);
+        const centerX = (scaledBounds.min.x + scaledBounds.max.x) / 2;
+        const centerZ = (scaledBounds.min.z + scaledBounds.max.z) / 2;
+        allNodes.position.x = -centerX;
+        allNodes.position.y = -scaledBounds.min.y;
+        allNodes.position.z = -centerZ;
+      }
+
       if (this.camera && this.modelRoot) {
-        this.camera.setTarget(this.modelRoot.position.clone());
-        if (buildingId === 'A') {
-          this.camera.radius = 52;
-        } else if (buildingId === 'B') {
-          this.camera.radius = 35;
-        } else if (isSede) {
-          this.camera.radius = 80;
+        // Center the camera on the origin, since the model has been translated to be centered.
+        this.camera.setTarget(BABYLON.Vector3.Zero());
+        if (isSede) {
+          this.camera.radius = 77;
+          this.camera.alpha = -Math.PI / 2;
+          this.camera.beta = 1.25;
+        } else if (isBuildingB) {
+          this.camera.radius = 36.4;
+          this.camera.alpha = Math.PI / 4;
+          this.camera.beta = Math.PI / 3;
+        } else {
+          this.camera.radius = 36.4;
+          this.camera.alpha = Math.PI / 4;
+          this.camera.beta = Math.PI / 3;
         }
       }
     } catch (err) {
@@ -289,26 +344,16 @@ export class BabylonSceneService implements OnDestroy {
 
     const color = new BABYLON.Color3(0.95, 0.08, 0.08);
 
-    // El último punto es la posición 3D real del destino en espacio mundo (ej: x=33.35, z=0.50 para A204)
-    const destWorld = points[points.length - 1].clone();
-
-    // En Edificio A (Piso 2 y Piso 3), el pasillo central está en Z = 6.05
-    // Las salas superiores están en Z ~ 0.50 y las inferiores en Z ~ 11.60
-    // La entrada/escaleras está en X = 11.60
-    const startX = 11.60;
-    const corridorZ = 6.05;
-    const heightY = destWorld.y || 1.00;
-
-    const startPoint = new BABYLON.Vector3(startX, heightY, corridorZ);
-    const corridorWaypoint = new BABYLON.Vector3(destWorld.x, heightY, corridorZ);
-    const finalDestPoint = destWorld;
-
-    // Crear la ruta de 3 puntos: Inicio Pasillo -> Waypoint Pasillo Frente a la Sala -> Entrada Sala
-    const worldPoints: BABYLON.Vector3[] = [
-      startPoint,
-      corridorWaypoint,
-      finalDestPoint
-    ];
+    // Los puntos ya vienen en coordenadas mundo (transformados desde el espacio local del OBJ
+    // usando localToWorld() antes de llamar a este método). Se dibujan segmento a segmento.
+    // Se iguala la Y de todos los waypoints intermedios a un valor sobre el suelo para
+    // que la línea no atraviese el modelo.
+    const floorY = Math.max(points[points.length - 1].y, 0.5);
+    const worldPoints: BABYLON.Vector3[] = points.map((p, i) =>
+      i === points.length - 1
+        ? p.clone()                                             // destino: respetar su Y real
+        : new BABYLON.Vector3(p.x, floorY, p.z)               // waypoints intermedios: nivelados
+    );
 
     const totalSegments = worldPoints.length - 1;
 
@@ -326,6 +371,17 @@ export class BabylonSceneService implements OnDestroy {
     };
 
     drawSegment(0);
+  }
+
+  /**
+   * Transforma un punto del espacio local del modelo OBJ al espacio mundo de Babylon.
+   * Las coordenadas de Firestore (Locaciones, navigation-paths) están en el sistema de
+   * coordenadas local del OBJ. Para dibujar flechas en la posición correcta se debe
+   * aplicar la misma matriz mundo que usa el modelRoot (rotación, escala, traslación).
+   */
+  public localToWorld(localPoint: BABYLON.Vector3): BABYLON.Vector3 {
+    if (!this.modelRoot) return localPoint.clone();
+    return BABYLON.Vector3.TransformCoordinates(localPoint, this.modelRoot.getWorldMatrix());
   }
 
   public clearGuideArrows(): void {

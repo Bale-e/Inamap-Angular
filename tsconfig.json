@@ -1,15 +1,14 @@
 {
   "compileOnSave": false,
   "compilerOptions": {
+    "skipLibCheck": true,
+    "baseUrl": "./",
+    "downlevelIteration": true,
     "importHelpers": true,
     "module": "es2020",
     "moduleResolution": "bundler",
     "target": "es2022",
-    "skipLibCheck": true,
-    "types": [
-      "node",
-      "jasmine"
-    ],
+    "types": [],
     "lib": [
       "es2022",
       "dom"
@@ -18,12 +17,16 @@
   "angularCompilerOptions": {
     "enableIvy": true
   },
+  "files": [],
   "include": [
     "src/**/*.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "out-tsc",
-    "src/**/*.spec.ts"
+  "references": [
+    {
+      "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.spec.json"
+    }
   ]
 }

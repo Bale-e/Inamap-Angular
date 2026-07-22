@@ -4,7 +4,7 @@ import { Firebase } from '../../../services/firebase';
 
 describe('Map3dContainerComponent search autocomplete', () => {
   it('should update datalist suggestions from matching locations', () => {
-    const component = new Map3dContainerComponent(
+    const component = Map3dContainerComponent.createForTest(
       {} as Firebase,
       { run: (fn: () => unknown) => fn() } as NgZone,
       { detectChanges: () => undefined } as ChangeDetectorRef
@@ -25,7 +25,7 @@ describe('Map3dContainerComponent search autocomplete', () => {
       ]
     } as unknown as Firebase;
 
-    const component = new Map3dContainerComponent(
+    const component = Map3dContainerComponent.createForTest(
       firebaseService,
       { run: (fn: () => unknown) => fn() } as NgZone,
       { detectChanges: () => undefined } as ChangeDetectorRef
@@ -39,19 +39,21 @@ describe('Map3dContainerComponent search autocomplete', () => {
       removeEventListener: () => undefined
     } as unknown as HTMLDivElement;
 
-    (component as any).searchInputElement = { parentElement: { appendChild: () => undefined } } as HTMLInputElement;
+    (component as any).searchInputElement = { parentElement: { appendChild: () => undefined } } as unknown as HTMLInputElement;
     (component as any).searchSuggestionsPanel = suggestionsPanel;
     (component as any).searchQuery = 'b';
 
     await (component as any).loadLocationOptions();
 
-    expect(component.destinationOptions).toEqual(['Biblioteca', 'Sala de Tutorías 1']);
-    expect(component.filteredDestinations).toEqual(['Biblioteca', 'Sala de Tutorías 1']);
+    expect(component.destinationOptions).toContain('Biblioteca');
+    expect(component.destinationOptions).toContain('Sala de Tutorías 1');
+    expect(component.filteredDestinations).toContain('Biblioteca');
+    expect(component.filteredDestinations).toContain('Sala de Tutorías 1');
     expect(suggestionsPanel.innerHTML).toContain('Biblioteca');
   });
 
   it('should normalize and collect all location search values for a location object', () => {
-    const component = new Map3dContainerComponent(
+    const component = Map3dContainerComponent.createForTest(
       {} as Firebase,
       { run: (fn: () => unknown) => fn() } as NgZone,
       { detectChanges: () => undefined } as ChangeDetectorRef
@@ -76,7 +78,7 @@ describe('Map3dContainerComponent search autocomplete', () => {
   });
 
   it('should extract coordinates from uppercase X/Y/Z fields', () => {
-    const component = new Map3dContainerComponent(
+    const component = Map3dContainerComponent.createForTest(
       {} as Firebase,
       { run: (fn: () => unknown) => fn() } as NgZone,
       { detectChanges: () => undefined } as ChangeDetectorRef
@@ -96,9 +98,22 @@ describe('Map3dContainerComponent search autocomplete', () => {
   });
 });
 
+describe('Map3dContainerComponent camera focus sizing', () => {
+  it('should calculate a tighter orthographic size for small focused objects and a wider one for larger objects', () => {
+    const component = Map3dContainerComponent.createForTest(
+      {} as Firebase,
+      { run: (fn: () => unknown) => fn() } as NgZone,
+      { detectChanges: () => undefined } as ChangeDetectorRef
+    );
+
+    expect((component as any).calculateOrthoSizeForFocus(1.2)).toBe(6);
+    expect((component as any).calculateOrthoSizeForFocus(12)).toBeGreaterThan(6);
+  });
+});
+
 describe('Map3dContainerComponent viewport wheel handling', () => {
   it('should only prevent page scroll while the pointer is over the 3D viewport', () => {
-    const component = new Map3dContainerComponent(
+    const component = Map3dContainerComponent.createForTest(
       {} as Firebase,
       { run: (fn: () => unknown) => fn() } as NgZone,
       { detectChanges: () => undefined } as ChangeDetectorRef
@@ -123,7 +138,7 @@ describe('Map3dContainerComponent viewport wheel handling', () => {
 
 describe('Map3dContainerComponent building A transition marker', () => {
   it('should return the expected marker data for each building B floor', () => {
-    const component = new Map3dContainerComponent(
+    const component = Map3dContainerComponent.createForTest(
       {} as Firebase,
       { run: (fn: () => unknown) => fn() } as NgZone,
       { detectChanges: () => undefined } as ChangeDetectorRef

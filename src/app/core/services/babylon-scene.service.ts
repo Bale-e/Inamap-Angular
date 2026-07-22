@@ -188,18 +188,39 @@ export class BabylonSceneService implements OnDestroy {
     const transformMatrix = viewMatrix.multiply(projectionMatrix);
     const viewport = new BABYLON.Viewport(0, 0, this.engine.getRenderWidth(), this.engine.getRenderHeight());
 
-    const projectPoint = (localPos: BABYLON.Vector3): { x: number; y: number; visible: boolean } => {
-      let finalWorldPos = localPos;
-      if (this.modelRoot) {
-        this.modelRoot.computeWorldMatrix(true);
-        finalWorldPos = BABYLON.Vector3.TransformCoordinates(localPos, this.modelRoot.getWorldMatrix());
+    // Proyecta un punto local, ajustando su Y al suelo real mediante raycast hacia abajo
+    const projectPointOnGround = (
+      localX: number,
+      localZ: number,
+      heightOffset = 0.05
+    ): { x: number; y: number; visible: boolean } => {
+      const localPos = new BABYLON.Vector3(localX, 0, localZ);
+
+      const worldPos = this.modelRoot
+        ? BABYLON.Vector3.TransformCoordinates(localPos, this.modelRoot.getWorldMatrix())
+        : localPos;
+
+      let groundY = worldPos.y;
+      try {
+        const rayOrigin = new BABYLON.Vector3(worldPos.x, 50, worldPos.z);
+        const ray = new BABYLON.Ray(rayOrigin, BABYLON.Vector3.Down(), 200);
+        const pickInfo = this.scene ? this.scene.pickWithRay(ray) : null;
+        if (pickInfo && pickInfo.hit && pickInfo.pickedPoint) {
+          groundY = pickInfo.pickedPoint.y;
+        }
+      } catch (e) {
+        // si falla el raycast, mantener worldPos.y como fallback
       }
+
+      const adjustedWorldPos = new BABYLON.Vector3(worldPos.x, groundY + heightOffset, worldPos.z);
+
       const screenCoords = BABYLON.Vector3.Project(
-        finalWorldPos,
+        adjustedWorldPos,
         BABYLON.Matrix.Identity(),
         transformMatrix,
         viewport
       );
+
       const isVisible =
         screenCoords.z > 0 &&
         screenCoords.z < 1 &&
@@ -213,8 +234,7 @@ export class BabylonSceneService implements OnDestroy {
 
     // Marcador Edificio B (desde Edificio A)
     if (this.currentBuilding === 'A') {
-      const pos = new BABYLON.Vector3(11.07, 0.05, 1.13);
-      const proj = projectPoint(pos);
+      const proj = projectPointOnGround(11.07, 1.13);
       markers.push({
         id: 'marker-building-b',
         label: '→ Ir al Edificio B',
@@ -225,14 +245,14 @@ export class BabylonSceneService implements OnDestroy {
       });
 
       if (this.currentFloorModel.includes('Piso 1')) {
-        const sedePos = new BABYLON.Vector3(-9.41, 0.01, -4.88);
-        const sedeProj = projectPoint(sedePos);
+        // Usar X/Z de Cuerpo45 como referencia, apoyada en el suelo real
+        const proj2 = projectPointOnGround(0.9066183246636239, 6.24408551363563);
         markers.push({
           id: 'marker-sede',
           label: '→ Ir al mapa principal',
-          x: sedeProj.x,
-          y: sedeProj.y,
-          visible: sedeProj.visible,
+          x: proj2.x,
+          y: proj2.y,
+          visible: proj2.visible,
           type: 'sede'
         });
       }
@@ -240,8 +260,7 @@ export class BabylonSceneService implements OnDestroy {
 
     // Marcador Edificio A (desde Edificio B)
     if (this.currentBuilding === 'B') {
-      const pos = new BABYLON.Vector3(-0.55, 0.05, 11.23);
-      const proj = projectPoint(pos);
+      const proj = projectPointOnGround(-0.55, 11.23);
       markers.push({
         id: 'marker-building-a',
         label: '← Volver al Edificio A',

@@ -23,6 +23,10 @@ export class FloorSelectorComponent {
     this.isDialogVisible = !this.isDialogVisible;
   }
 
+  openDialog(): void {
+    this.isDialogVisible = true;
+  }
+
   closeDialog(): void {
     this.isDialogVisible = false;
   }

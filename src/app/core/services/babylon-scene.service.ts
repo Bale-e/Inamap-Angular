@@ -90,7 +90,7 @@ export class BabylonSceneService implements OnDestroy {
       this.scene
     );
     this.camera.lowerRadiusLimit = 2;
-    this.camera.upperRadiusLimit = 120;
+    this.camera.upperRadiusLimit = 200;
     this.camera.attachControl(canvas, true);
   }
 
@@ -175,6 +175,13 @@ export class BabylonSceneService implements OnDestroy {
 
       if (this.camera && this.modelRoot) {
         this.camera.setTarget(this.modelRoot.position.clone());
+        if (buildingId === 'A') {
+          this.camera.radius = 52;
+        } else if (buildingId === 'B') {
+          this.camera.radius = 35;
+        } else if (isSede) {
+          this.camera.radius = 80;
+        }
       }
     } catch (err) {
       console.error(`Error al cargar modelo 3D (${rootUrl}${modelName}):`, err);
@@ -370,7 +377,7 @@ export class BabylonSceneService implements OnDestroy {
 
   public zoomOut(): void {
     if (!this.camera) return;
-    this.camera.radius = Math.min(80, this.camera.radius + 3);
+    this.camera.radius = Math.min(200, this.camera.radius + 3);
   }
 
   public resetCamera(): void {
@@ -378,7 +385,7 @@ export class BabylonSceneService implements OnDestroy {
     this.camera.target = new BABYLON.Vector3(0, 0, 0);
     this.camera.alpha = Math.PI / 4;
     this.camera.beta = Math.PI / 3;
-    this.camera.radius = 25;
+    this.camera.radius = this.currentBuilding === 'A' ? 52 : 25;
   }
 
   public focusOnMesh(meshName: string, targetRadius = 6, durationMs = 700): void {

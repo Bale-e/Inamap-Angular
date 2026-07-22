@@ -81,7 +81,20 @@ export class Firebase {
 
     for (const nombreColeccion of this.coleccionesLocaciones) {
       const results = await this.fetchCollectionResults(`Edificios/${edificioId}/${nombreColeccion}`);
-      allResults.push(...results);
+      const fallbackPiso = nombreColeccion.includes('2')
+        ? 'Piso 2'
+        : nombreColeccion.includes('3')
+        ? 'Piso 3'
+        : nombreColeccion.includes('-1')
+        ? 'Piso -1'
+        : 'Piso 1';
+
+      results.forEach((loc: any) => {
+        allResults.push({
+          ...loc,
+          _coleccionPiso: fallbackPiso
+        });
+      });
     }
 
     return allResults;
@@ -176,6 +189,52 @@ async getLocacionesDeTodosLosEdificios() {
 
       return true;
     }) ?? null;
+  }
+
+  async getAllNavigationPaths() {
+    return this.getNavigationPaths();
+  }
+
+  async getNavigationPathsByEdificioYPiso(edificio: string, piso: string): Promise<any[]> {
+    const todas = await this.getNavigationPaths();
+    const pisoNormalizado = this.normalizeFloorKey(piso);
+    const edificioNormalizado = edificio ? edificio.trim().toLowerCase() : '';
+
+    return todas.filter((doc: any) => {
+      // 1. Filtrar por Piso
+      const pisoValor = getFieldCI(doc, 'Piso') ?? getFieldCI(doc, 'Piso ') ?? getFieldCI(doc, 'piso');
+      const normalizedPiso = this.normalizeFloorKey((pisoValor ?? '').toString());
+      if (pisoNormalizado && normalizedPiso !== pisoNormalizado) {
+        return false;
+      }
+
+      // 2. Filtrar por Edificio si está presente
+      if (edificioNormalizado) {
+        const edValor = (getFieldCI(doc, 'Edificio') ?? getFieldCI(doc, 'edificio') ?? '').toString().trim().toLowerCase();
+        const matchesDirect = edValor === edificioNormalizado;
+        const matchesWithWord = edValor.includes(`edificio${edificioNormalizado}`) || 
+                                edValor.includes(`edificio ${edificioNormalizado}`);
+        const matchesShort = edValor === `edificio${edificioNormalizado}` || 
+                             edValor === `edificio ${edificioNormalizado}`;
+                             
+        if (!matchesDirect && !matchesWithWord && !matchesShort) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }
+
+  async printNavigationPathRawData(edificio?: string, piso?: string): Promise<void> {
+    try {
+      const paths = (edificio && piso) 
+        ? await this.getNavigationPathsByEdificioYPiso(edificio, piso)
+        : await this.getAllNavigationPaths();
+      console.log('[DEBUG NavigationPaths Raw]', JSON.stringify(paths, null, 2));
+    } catch (err) {
+      console.error('[DEBUG NavigationPaths Error]', err);
+    }
   }
 
   async getRutas() {

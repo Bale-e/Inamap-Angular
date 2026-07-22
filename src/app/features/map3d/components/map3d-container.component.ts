@@ -322,7 +322,10 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
   async onDestinationSelected(destinationName: string): Promise<void> {
     this.selectedDestination = destinationName;
-    const result = await this.mapNavService.calculateRoute(destinationName);
+    const result = await this.mapNavService.calculateRoute(
+      destinationName,
+      (locName, cuerpoId) => this.babylonSceneService.getMeshWorldPosition(locName, cuerpoId)
+    );
     if (result) {
       if (result.piso) {
         this.switchFloorByPisoName(result.piso, result.edificio);
@@ -858,7 +861,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       // guardar referencia para centrar la cámara mientras el modelo rote
       this.modelRoot = allNodes;
       // Rotar el objeto 180° en Y al cargar (mantener rotación X para orientación)
-      allNodes.rotation = new BABYLON.Vector3(-Math.PI / 2, Math.PI, 0);
+      allNodes.rotation = isSede
+        ? new BABYLON.Vector3(0, Math.PI, 0)
+        : new BABYLON.Vector3(-Math.PI / 2, Math.PI, 0);
 
       meshes.forEach((mesh, index) => {
         mesh.isVisible = true;

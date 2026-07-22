@@ -55,8 +55,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   engine: BABYLON.Engine | null = null;
   scene: BABYLON.Scene | null = null;
   camera: BABYLON.ArcRotateCamera | null = null;
-  orthoSize = 25;
-  defaultOrthoSize = 25;
+  orthoSize = 50;
+  defaultOrthoSize = 50;
   isTopDownView = false;
   topDownPanLimits = { minX: -10, maxX: 10, minZ: -10, maxZ: 10 };
   cameraBeforeRenderObserver: any = null;
@@ -663,7 +663,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     const maxPanX = 5;
     const minPanX = -5;
     const orthoMin = 2; // tamaño ortho más cercano (zoom máximo)
-    const orthoMax = 60; // tamaño ortho más lejano (zoom mínimo)
+    const orthoMax = 100; // tamaño ortho más lejano (zoom mínimo)
     const topDownMinX = this.topDownPanLimits.minX;
     const topDownMaxX = this.topDownPanLimits.maxX;
     const topDownMinZ = this.topDownPanLimits.minZ;
@@ -1155,7 +1155,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   onZoomOut(): void {
     this.babylonSceneService.zoomOut();
     if (this.camera && this.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
-      this.orthoSize = Math.min(80, this.orthoSize + 3);
+      this.orthoSize = Math.min(100, this.orthoSize + 3);
       this.updateOrthoCamera();
     } else if (this.camera) {
       this.camera.radius = Math.min(150, this.camera.radius + 3);

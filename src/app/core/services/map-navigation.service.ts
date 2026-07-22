@@ -3,6 +3,7 @@ import { BehaviorSubject } from 'rxjs';
 import * as BABYLON from 'babylonjs';
 import { Firebase } from '../../services/firebase';
 import { BuildingId, SelectedLocationInfo } from '../models/navigation.model';
+import { buildRoute, findDestinationInPaths } from '../../services/route-finder.service';
 
 @Injectable({
   providedIn: 'root'
@@ -19,8 +20,6 @@ export class MapNavigationService {
 
   private destinationsSubject = new BehaviorSubject<string[]>([]);
   public destinations$ = this.destinationsSubject.asObservable();
-
-  private readonly mainEntranceAccess = new BABYLON.Vector3(11.22, 0.01, 0.12);
 
   private readonly infoDataMap: Record<string, SelectedLocationInfo> = {
     'Cuerpo13': { nombre: 'Fotocopiadora y Suministros', desc: 'Servicio de fotocopiado y venta de materiales para estudiantes.' },
@@ -118,7 +117,15 @@ export class MapNavigationService {
   private cachedLocations: any[] = [];
 
   public async getLocationInfoByMeshNameAsync(meshName: string): Promise<SelectedLocationInfo | null> {
-    const normalizedMeshName = (meshName || '').replace(/\s+/g, '');
+    const normalizedMeshName = (meshName || '').replace(/\s+/g, '').toLowerCase();
+    if (this.currentBuildingSubject.value === 'S' || normalizedMeshName.includes('untitled') || normalizedMeshName.includes('fixed') || normalizedMeshName.includes('sede')) {
+      return {
+        nombre: 'Sede Inacap',
+        desc: 'Vista general de la sede Inacap y mapa principal del campus.',
+        edificio: 'S',
+        piso: 'General'
+      };
+    }
     const floorSpecificInfo = this.getFloorSpecificInfo(meshName);
     const infoDataEntry = floorSpecificInfo || this.infoDataMap[meshName] || this.infoDataMap[normalizedMeshName] || this.infoDataMap[normalizedMeshName.toLowerCase()];
     if (infoDataEntry) {
@@ -173,6 +180,15 @@ export class MapNavigationService {
   }
 
   public getLocationInfoByMeshName(meshName: string): SelectedLocationInfo | null {
+    const normalizedMeshName = (meshName || '').replace(/\s+/g, '').toLowerCase();
+    if (this.currentBuildingSubject.value === 'S' || normalizedMeshName.includes('untitled') || normalizedMeshName.includes('fixed') || normalizedMeshName.includes('sede')) {
+      return {
+        nombre: 'Sede Inacap',
+        desc: 'Vista general de la sede Inacap y mapa principal del campus.',
+        edificio: 'S',
+        piso: 'General'
+      };
+    }
     const floorSpecificInfo = this.getFloorSpecificInfo(meshName);
     if (floorSpecificInfo) {
       return floorSpecificInfo;
@@ -250,140 +266,23 @@ export class MapNavigationService {
     return null;
   }
 
-  private parseNavPath(navPath: any): { accesos: BABYLON.Vector3[]; giros: BABYLON.Vector3[] } {
-    const accesos: BABYLON.Vector3[] = [];
-    const giros: BABYLON.Vector3[] = [];
-
-    if (!navPath || typeof navPath !== 'object') return { accesos, giros };
-
-    if (navPath.Accesos && typeof navPath.Accesos === 'object') {
-      const items = Array.isArray(navPath.Accesos) ? navPath.Accesos : Object.values(navPath.Accesos);
-      for (const item of items) {
-        const v = this.extractVec3(item as any);
-        if (v) accesos.push(v);
-      }
+  private getPisoFromLoc(loc: any): string {
+    if (!loc) return 'Piso 1';
+    const raw = loc.Piso ?? loc.piso ?? loc.floor ?? loc.Floor ?? loc._coleccionPiso;
+    if (!raw) return 'Piso 1';
+    const str = raw.toString().trim();
+    if (/^\d+$/.test(str)) return `Piso ${str}`;
+    if (/^piso\s*\d+/i.test(str)) {
+      const num = str.replace(/[^0-9-]/g, '');
+      return `Piso ${num}`;
     }
-
-    const turnsList = navPath.Giros ?? navPath.turns ?? navPath.Turns;
-    if (Array.isArray(turnsList)) {
-      for (const turn of turnsList) {
-        const v = this.extractVec3(turn);
-        if (v) giros.push(v);
-      }
-    }
-    return { accesos, giros };
+    return str;
   }
 
-  private distSq(a: BABYLON.Vector3, b: BABYLON.Vector3): number {
-    const dx = a.x - b.x;
-    const dz = a.z - b.z;
-    return dx * dx + dz * dz;
-  }
-
-  private buildOptimalPath(
-    entry: BABYLON.Vector3,
-    accesos: BABYLON.Vector3[],
-    giros: BABYLON.Vector3[],
-    destination: BABYLON.Vector3
-  ): BABYLON.Vector3[] {
-    const route: BABYLON.Vector3[] = [new BABYLON.Vector3(entry.x, entry.y, entry.z)];
-    const corridorNodes = [...accesos, ...giros];
-
-    if (corridorNodes.length === 0) {
-      route.push(new BABYLON.Vector3(destination.x, destination.y, destination.z));
-      return route;
-    }
-
-    const startNode = accesos.length > 0 ? accesos[0] : giros[0];
-    const remaining = corridorNodes.filter(node => node !== startNode);
-    const polyline: BABYLON.Vector3[] = [startNode];
-    let current = startNode;
-
-    while (remaining.length > 0) {
-      let bestIdx = -1;
-      let bestDist = Infinity;
-      for (let i = 0; i < remaining.length; i++) {
-        const d = this.distSq(current, remaining[i]);
-        if (d < bestDist) {
-          bestDist = d;
-          bestIdx = i;
-        }
-      }
-      const nextNode = remaining.splice(bestIdx, 1)[0];
-      polyline.push(nextNode);
-      current = nextNode;
-    }
-
-    let bestPoint = polyline[0].clone();
-    let minTargetDist = Infinity;
-    let bestSegmentIndex = 0;
-
-    for (let i = 0; i < polyline.length - 1; i++) {
-      const A = polyline[i];
-      const B = polyline[i + 1];
-      const isLastSegment = (i === polyline.length - 2);
-
-      let projX = A.x;
-      let projZ = A.z;
-
-      if (isLastSegment) {
-        const dx = B.x - A.x;
-        const dz = B.z - A.z;
-        const absDx = Math.abs(dx);
-        const absDz = Math.abs(dz);
-
-        if (absDx > 0.0001 || absDz > 0.0001) {
-          if (absDx > absDz) {
-            const dirX = dx > 0 ? 1 : -1;
-            const t = (destination.x - A.x) * dirX;
-            projX = t >= 0 ? destination.x : A.x;
-            projZ = A.z;
-          } else {
-            const dirZ = dz > 0 ? 1 : -1;
-            const t = (destination.z - A.z) * dirZ;
-            projZ = t >= 0 ? destination.z : A.z;
-            projX = A.x;
-          }
-        }
-      } else {
-        const dx = B.x - A.x;
-        const dz = B.z - A.z;
-        const lenSq = dx * dx + dz * dz;
-        let t = 0;
-        if (lenSq > 0.0001) {
-          const dot = (destination.x - A.x) * dx + (destination.z - A.z) * dz;
-          t = Math.max(0, Math.min(1, dot / lenSq));
-        }
-        projX = A.x + t * dx;
-        projZ = A.z + t * dz;
-      }
-
-      const distSqToProj = (destination.x - projX) * (destination.x - projX) + (destination.z - projZ) * (destination.z - projZ);
-
-      if (distSqToProj < minTargetDist) {
-        minTargetDist = distSqToProj;
-        bestPoint = new BABYLON.Vector3(projX, entry.y, projZ);
-        bestSegmentIndex = i;
-      }
-    }
-
-    for (let i = 0; i <= bestSegmentIndex; i++) {
-      if (i === 0 && this.distSq(entry, polyline[0]) < 0.01) continue;
-      route.push(new BABYLON.Vector3(polyline[i].x, polyline[i].y, polyline[i].z));
-    }
-
-    const lastNode = route[route.length - 1];
-    if (this.distSq(lastNode, bestPoint) > 0.01) {
-      route.push(bestPoint);
-    }
-    if (this.distSq(bestPoint, destination) > 0.01) {
-      route.push(new BABYLON.Vector3(destination.x, destination.y, destination.z));
-    }
-
-    return route;
-  }
-
-  public async calculateRoute(destinationName: string): Promise<{
+  public async calculateRoute(
+    destinationName: string,
+    meshPositionGetter?: (locName: string, cuerpoId?: string) => BABYLON.Vector3 | null
+  ): Promise<{
     coord: BABYLON.Vector3;
     routePoints: BABYLON.Vector3[];
     statusText: string;
@@ -395,34 +294,54 @@ export class MapNavigationService {
       return null;
     }
 
-    const coord = this.extractVec3(loc);
-    if (!coord) {
+    const piso = this.getPisoFromLoc(loc);
+    const edificioField = loc._edificioNombre || loc.Edificio || loc.edificio || 'A';
+    const edificio: BuildingId = /b/i.test(edificioField) ? 'B' : /s|sede/i.test(edificioField) ? 'S' : 'A';
+    const cuerpoNum = loc.Cuerpo ?? loc.cuerpo;
+    const cuerpoId = cuerpoNum != null ? `cuerpo${cuerpoNum}` : undefined;
+
+    // 1. Obtener la posición del mesh 3D real en la escena si está cargado
+    let meshPos: BABYLON.Vector3 | null = null;
+    if (meshPositionGetter) {
+      meshPos = meshPositionGetter(destinationName, cuerpoId);
+    }
+
+    // 2. Obtener todos los navigation-paths del piso/edificio actual
+    const paths = await this.firebaseService.getNavigationPathsByEdificioYPiso(edificio, piso);
+
+    // 3. Buscar el destino en los navigation-paths
+    const destMatch = paths.length > 0
+      ? findDestinationInPaths(paths, destinationName)
+      : null;
+    const navPathCoord = destMatch ? destMatch.position : null;
+
+    // 4. Coordenadas de la colección Locaciones como fallback
+    const docCoord = this.extractVec3(loc);
+
+    // Prioridad de destino:
+    // 1) meshPos (posición real del mesh 3D en pantalla)
+    // 2) navPathCoord (coordenada del conector en navigation-paths)
+    // 3) docCoord (coordenada de la locación en Firestore)
+    const destination = meshPos ?? navPathCoord ?? (docCoord ? new BABYLON.Vector3(docCoord.x, Math.max(docCoord.y, 0.05), docCoord.z) : null);
+
+    if (!destination) {
+      console.warn(`[MapNav] Sin coordenadas disponibles para: ${destinationName}`);
       return null;
     }
 
-    const piso = loc.Piso || loc.piso || 'Piso 1';
-    const edificioField = loc._edificioNombre || loc.Edificio || loc.edificio || 'A';
-    const edificio: BuildingId = /b/i.test(edificioField) ? 'B' : /s|sede/i.test(edificioField) ? 'S' : 'A';
+    // 5. Construir la ruta (Acceso → Giros → Destino)
+    const routePoints = buildRoute(paths, null, destinationName, destination);
+    const finalRoute = routePoints.length > 0 ? routePoints : [destination.clone()];
 
-    const navPath = await this.firebaseService.getNavigationPath(piso, edificio);
-    const destination = new BABYLON.Vector3(coord.x, Math.max(coord.y, 0.05), coord.z);
-
-    let routePoints: BABYLON.Vector3[] = [];
-    if (!navPath) {
-      routePoints = [this.mainEntranceAccess.clone(), destination];
-    } else {
-      const { accesos, giros } = this.parseNavPath(navPath);
-      routePoints = this.buildOptimalPath(this.mainEntranceAccess.clone(), accesos, giros, destination);
-    }
-
-    const statusText = `${destinationName} — Edificio ${edificio} / ${piso} (Coordenadas: ${coord.x.toFixed(2)}, ${coord.y.toFixed(2)}, ${coord.z.toFixed(2)})`;
+    const statusText = `${destinationName} — Edificio ${edificio} / ${piso} (Coord: ${destination.x.toFixed(2)}, ${destination.y.toFixed(2)}, ${destination.z.toFixed(2)})`;
 
     return {
       coord: destination,
-      routePoints,
+      routePoints: finalRoute,
       statusText,
       piso,
       edificio
     };
   }
 }
+

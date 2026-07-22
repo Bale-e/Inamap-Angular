@@ -152,7 +152,9 @@ export class BabylonSceneService implements OnDestroy {
       const allNodes = new BABYLON.TransformNode('modelRoot', this.scene);
       this.modelRoot = allNodes;
 
-      allNodes.rotation = new BABYLON.Vector3(-Math.PI / 2, Math.PI, 0);
+      allNodes.rotation = isSede
+        ? new BABYLON.Vector3(0, -Math.PI / 2, 0)
+        : new BABYLON.Vector3(-Math.PI / 2, Math.PI, 0);
 
       if (isBuildingB) {
         allNodes.scaling = new BABYLON.Vector3(1.2, 1.2, 1.2);
@@ -278,19 +280,37 @@ export class BabylonSceneService implements OnDestroy {
     if (!this.scene || points.length < 2) return;
     this.clearGuideArrows();
 
-    const totalSegments = points.length - 1;
     const color = new BABYLON.Color3(0.95, 0.08, 0.08);
+
+    // El último punto es la posición 3D real del destino en espacio mundo (ej: x=33.35, z=0.50 para A204)
+    const destWorld = points[points.length - 1].clone();
+
+    // En Edificio A (Piso 2 y Piso 3), el pasillo central está en Z = 6.05
+    // Las salas superiores están en Z ~ 0.50 y las inferiores en Z ~ 11.60
+    // La entrada/escaleras está en X = 11.60
+    const startX = 11.60;
+    const corridorZ = 6.05;
+    const heightY = destWorld.y || 1.00;
+
+    const startPoint = new BABYLON.Vector3(startX, heightY, corridorZ);
+    const corridorWaypoint = new BABYLON.Vector3(destWorld.x, heightY, corridorZ);
+    const finalDestPoint = destWorld;
+
+    // Crear la ruta de 3 puntos: Inicio Pasillo -> Waypoint Pasillo Frente a la Sala -> Entrada Sala
+    const worldPoints: BABYLON.Vector3[] = [
+      startPoint,
+      corridorWaypoint,
+      finalDestPoint
+    ];
+
+    const totalSegments = worldPoints.length - 1;
 
     const drawSegment = (i: number) => {
       if (!this.scene) return;
-      const from = points[i];
-      const to = points[i + 1];
-      const meshes = dibujarFlechaGuia(this.scene, from, to, color);
-      if (this.modelRoot) {
-        meshes.forEach(m => {
-          m.parent = this.modelRoot;
-        });
-      }
+      const worldFrom = worldPoints[i];
+      const worldTo = worldPoints[i + 1];
+
+      const meshes = dibujarFlechaGuia(this.scene, worldFrom, worldTo, color);
       this.guideArrowMeshes.push(...meshes);
 
       if (i + 1 < totalSegments) {
@@ -311,10 +331,9 @@ export class BabylonSceneService implements OnDestroy {
     this.clearDestinationMarker();
 
     const marker = new BABYLON.TransformNode('destinationMarker', this.scene);
+    // position ya viene en coordenadas mundo (world space) reales del 3D viewport.
+    // Se asigna directamente sin emparentar a modelRoot para evitar rotaciones duplicadas.
     marker.position = new BABYLON.Vector3(position.x, Math.max(position.y, 0.05), position.z);
-    if (this.modelRoot) {
-      marker.parent = this.modelRoot;
-    }
 
     const material = new BABYLON.StandardMaterial('destMat', this.scene);
     material.diffuseColor = new BABYLON.Color3(0.95, 0.05, 0.05);
@@ -386,13 +405,48 @@ export class BabylonSceneService implements OnDestroy {
       const newTarget = BABYLON.Vector3.Lerp(startTarget, targetPosition, eased);
       this.camera.target = newTarget;
       this.camera.radius = startRadius + (targetRadius - startRadius) * eased;
-
-      if (t < 1) {
-        requestAnimationFrame(animateStep);
-      }
     };
 
     requestAnimationFrame(animateStep);
+  }
+
+  public getMeshWorldPosition(locName: string, cuerpoId?: string): BABYLON.Vector3 | null {
+    if (!this.scene) return null;
+
+    const findMeshCI = (name: string): BABYLON.AbstractMesh | null => {
+      if (!name || !this.scene) return null;
+      let mesh = this.scene.getMeshByName(name);
+      if (mesh) return mesh;
+      const lower = name.toLowerCase();
+      const norm = name.replace(/[^a-z0-9]/gi, '').toLowerCase();
+      return this.scene.meshes.find(m => {
+        const mName = (m.name || '').toLowerCase();
+        const mNorm = mName.replace(/[^a-z0-9]/gi, '');
+        return mName === lower || mNorm === norm;
+      }) ?? null;
+    };
+
+    // 1. Buscar por cuerpoId explícito (ej. cuerpo15 o Cuerpo15)
+    let targetMesh = cuerpoId ? findMeshCI(cuerpoId) : null;
+
+    // 2. Si no se encontró por cuerpoId, buscar por locName
+    if (!targetMesh && locName) {
+      targetMesh = findMeshCI(locName);
+
+      // 3. Fallbacks para nombres clave como 'ConectorEdificioB', 'Escaleras', 'Acceso'
+      if (!targetMesh) {
+        const normLoc = locName.toLowerCase();
+        if (normLoc.includes('conector') || normLoc.includes('acceso') || normLoc.includes('escalera') || normLoc.includes('main')) {
+          targetMesh = findMeshCI('cuerpo3') || findMeshCI('cuerpo1') || findMeshCI('cuerpo13');
+        }
+      }
+    }
+
+    if (!targetMesh) return null;
+
+    targetMesh.computeWorldMatrix(true);
+    targetMesh.refreshBoundingInfo({});
+    return targetMesh.getBoundingInfo().boundingBox.centerWorld.clone();
   }
 
   public dispose(): void {

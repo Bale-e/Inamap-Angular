@@ -27,7 +27,9 @@ export class MapNavigationService {
     'Cuerpo29': { nombre: 'Sala de Tutorías 1', desc: 'Espacio de apoyo académico con tutores disponibles.' },
     'Cuerpo30': { nombre: 'Sala de Tutorías 2', desc: 'Espacio de apoyo académico con tutores disponibles.' },
     'Cuerpo28': { nombre: 'Sala de Tutorías 3', desc: 'Espacio adicional de tutorías con capacidad para grupos pequeños.' },
-    'Cuerpo27': { nombre: 'Sala de Tutorías 4', desc: 'Sala de apoyo académico y reuniones estudiantiles.' }
+    'Cuerpo27': { nombre: 'Sala de Tutorías 4', desc: 'Sala de apoyo académico y reuniones estudiantiles.' },
+    'Cuerpo20': { nombre: 'Sala A106', desc: 'Espacio académico del Edificio A, piso 1.' },
+    'cuerpo20': { nombre: 'Sala A106', desc: 'Espacio académico del Edificio A, piso 1.' }
   };
 
   constructor(private firebaseService: Firebase) {}
@@ -47,8 +49,10 @@ export class MapNavigationService {
   private cachedLocations: any[] = [];
 
   public async getLocationInfoByMeshNameAsync(meshName: string): Promise<SelectedLocationInfo | null> {
-    if (this.infoDataMap[meshName]) {
-      return this.infoDataMap[meshName];
+    const normalizedMeshName = (meshName || '').replace(/\s+/g, '');
+    const infoDataEntry = this.infoDataMap[meshName] || this.infoDataMap[normalizedMeshName] || this.infoDataMap[normalizedMeshName.toLowerCase()];
+    if (infoDataEntry) {
+      return infoDataEntry;
     }
     const cleanName = meshName.replace(/\s+/g, '');
     const match = cleanName.match(/^cuerpo(\d+)/i);

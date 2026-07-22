@@ -153,7 +153,7 @@ export class BabylonSceneService implements OnDestroy {
       this.modelRoot = allNodes;
 
       allNodes.rotation = isSede
-        ? new BABYLON.Vector3(0, Math.PI, 0)
+        ? new BABYLON.Vector3(0, -Math.PI / 2, 0)
         : new BABYLON.Vector3(-Math.PI / 2, Math.PI, 0);
 
       if (isBuildingB) {

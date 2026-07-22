@@ -348,6 +348,12 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
   onZoomIn(): void {
     this.babylonSceneService.zoomIn();
+    if (this.camera && this.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
+      this.orthoSize = Math.max(2, this.orthoSize - 3);
+      this.updateOrthoCamera();
+    } else if (this.camera) {
+      this.camera.radius = Math.max(2, this.camera.radius - 3);
+    }
   }
 
   onFloorSelected(floorKey: string): void {
@@ -604,24 +610,37 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     // Resetear orthoSize al inicializar escena
     this.orthoSize = this.defaultOrthoSize;
 
-    const initialAlpha = this.isTopDownView ? -Math.PI / 2 : -Math.PI / 3;
-    const initialBeta = this.isTopDownView ? 0.12 : Math.PI / 5;
+    const isSede = this.currentFloor === this.sedeModel || this.currentBuilding === 'S';
+
+    const initialAlpha = (isSede || this.isTopDownView) ? -Math.PI / 2 : -Math.PI / 3;
+    const initialBeta = isSede ? 1.25 : (this.isTopDownView ? 0.12 : Math.PI / 5);
     // iniciar un 30% más cerca para una vista inicial más próxima
     const initialRadius = (this.isTopDownView ? 30 : 28) * 0.7;
 
     this.camera = new BABYLON.ArcRotateCamera('camera', initialAlpha, initialBeta, initialRadius, BABYLON.Vector3.Zero(), this.scene);
     this.camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
+    this.camera.minZ = -1000;
+    this.camera.maxZ = 1000;
     this.camera.attachControl(canvas, false, false);
     this.camera.wheelDeltaPercentage = 0.01;
     // permitir acercarse más (valor mínimo reducido) para respetar el zoom inicial
     this.camera.lowerRadiusLimit = 2;
     this.camera.upperRadiusLimit = 150;
-    this.camera.panningSensibility = 50;
+    this.camera.panningSensibility = 25;
     this.camera.checkCollisions = true;
     this.camera.collisionRadius = new BABYLON.Vector3(0.75, 0.75, 0.75);
     this.camera.setTarget(BABYLON.Vector3.Zero());
 
-    if (this.isTopDownView) {
+    if (isSede) {
+      this.camera.panningAxis = new BABYLON.Vector3(1, 0, 1);
+      // Habilitar rotación del modelo completa (~26° en alpha y ~14° en beta)
+      const rotMarginAlpha = 0.45;
+      const rotMarginBeta = 0.25;
+      this.camera.lowerAlphaLimit = initialAlpha - rotMarginAlpha;
+      this.camera.upperAlphaLimit = initialAlpha + rotMarginAlpha;
+      this.camera.lowerBetaLimit = Math.max(0.1, initialBeta - rotMarginBeta);
+      this.camera.upperBetaLimit = Math.min(Math.PI / 2 - 0.05, initialBeta + rotMarginBeta);
+    } else if (this.isTopDownView) {
       this.camera.panningAxis = new BABYLON.Vector3(1, 0, 1);
       this.camera.lowerAlphaLimit = this.camera.upperAlphaLimit = this.camera.alpha;
       this.camera.lowerBetaLimit = this.camera.upperBetaLimit = this.camera.beta;
@@ -672,7 +691,26 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
             allowPan = zoomPercent >= 0.3;
           }
 
-          if (this.isTopDownView) {
+          if (isSede) {
+            const sedeMinX = -80;
+            const sedeMaxX = 80;
+            const sedeMinZ = -80;
+            const sedeMaxZ = 80;
+            if (newTarget.x > sedeMaxX) {
+              newTarget.x = sedeMaxX;
+              modified = true;
+            } else if (newTarget.x < sedeMinX) {
+              newTarget.x = sedeMinX;
+              modified = true;
+            }
+            if (newTarget.z > sedeMaxZ) {
+              newTarget.z = sedeMaxZ;
+              modified = true;
+            } else if (newTarget.z < sedeMinZ) {
+              newTarget.z = sedeMinZ;
+              modified = true;
+            }
+          } else if (this.isTopDownView) {
             if (newTarget.x > topDownMaxX) {
               newTarget.x = topDownMaxX;
               modified = true;
@@ -772,15 +810,6 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
     this.renderLoopFn = () => {
       if (this.scene && this.camera) {
-        // Mantener la cámara siempre centrada en el modelo mientras rote
-        try {
-          if (this.modelRoot) {
-            this.camera.setTarget(this.modelRoot.position.clone());
-          }
-        } catch (e) {
-          // ignore
-        }
-
         this.scene.render();
         this.updateBuildingBMarkerPosition(canvas);
       }
@@ -860,9 +889,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       const allNodes = new BABYLON.TransformNode('modelRoot', this.scene);
       // guardar referencia para centrar la cámara mientras el modelo rote
       this.modelRoot = allNodes;
-      // Rotar el objeto 180° en Y al cargar (mantener rotación X para orientación)
+      // Rotar el objeto para que el lado derecho quede al frente (90° en Y para Sede)
       allNodes.rotation = isSede
-        ? new BABYLON.Vector3(0, Math.PI, 0)
+        ? new BABYLON.Vector3(0, -Math.PI / 2, 0)
         : new BABYLON.Vector3(-Math.PI / 2, Math.PI, 0);
 
       meshes.forEach((mesh, index) => {
@@ -879,7 +908,7 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
       const bounds = allNodes.getHierarchyBoundingVectors(true);
       const size = BABYLON.Vector3.Distance(bounds.min, bounds.max);
-      const targetSize = 25;
+      const targetSize = isSede ? 210 : 25;
 
       if (size > 0) {
         const scale = targetSize / size;
@@ -959,6 +988,21 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
           console.log('MESH CLICKEADO:', meshName);
           const normalizedMeshName = (meshName || '').replace(/\s+/g, '').toLowerCase();
           const isFloorTrigger = pickResult.pickedMesh && this.isFloorSelectionTrigger(pickResult.pickedMesh.name);
+          const isGroundMesh = pickResult.pickedMesh && pickResult.pickedMesh.name === 'ground';
+          const isSedeMesh = isSede || this.currentBuilding === 'S' || normalizedMeshName.includes('untitled') || normalizedMeshName.includes('fixed') || normalizedMeshName.includes('sede');
+
+          if (isSedeMesh && !isGroundMesh) {
+            this.closeFloorDialog();
+            this.openDetailPanel(
+              'Sede Inacap',
+              `<div class="detail-panel__body-content">
+                <p class="detail-panel__eyebrow">Mapa Principal · Sede Inacap</p>
+                <p class="detail-panel__text">Vista general del campus y terrenos de la Sede Inacap. Selecciona un edificio en el mapa o selector para explorar sus pisos y salas.</p>
+              </div>`
+            );
+            if (this.infoBox) this.infoBox.style.display = 'none';
+            return;
+          }
           console.log('CLICK HANDLER 2 -> meshName:', meshName, '| normalizedMeshName:', normalizedMeshName, '| isFloorTrigger:', isFloorTrigger, '| floorSelectorComponent existe:', !!this.floorSelectorComponent);
 
           // Si se hace click en la escalera secundaria del primer piso (cuerpo21),
@@ -1133,10 +1177,21 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
 
   onZoomOut(): void {
     this.babylonSceneService.zoomOut();
+    if (this.camera && this.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
+      this.orthoSize = Math.min(80, this.orthoSize + 3);
+      this.updateOrthoCamera();
+    } else if (this.camera) {
+      this.camera.radius = Math.min(150, this.camera.radius + 3);
+    }
   }
 
   onResetCamera(): void {
     this.babylonSceneService.resetCamera();
+    if (this.camera) {
+      this.orthoSize = this.defaultOrthoSize;
+      this.camera.setTarget(BABYLON.Vector3.Zero());
+      this.updateOrthoCamera();
+    }
   }
 
   onBuildingSelected(building: BuildingId): void {

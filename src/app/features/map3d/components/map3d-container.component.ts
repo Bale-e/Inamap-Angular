@@ -418,6 +418,7 @@ async onMeshPicked(meshName: string, pickResult?: any): Promise<void> {
     this.mapNavService.setFloor(targetFloor);
   }
 
+
   closeFloorDialog(): void {
     this.floorDialogVisible = false;
   }

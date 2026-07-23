@@ -183,6 +183,16 @@ export class BabylonSceneService implements OnDestroy {
     if (!this.scene) return;
 
     const buildingId: 'A' | 'B' | 'S' = typeof building === 'boolean' ? (building ? 'B' : 'A') : building;
+
+    // Si es el mismo modelo ya cargado, conservar la vista de cámara actual al terminar
+    const isSameModel = modelName === this.currentFloorModel && buildingId === this.currentBuilding && this.modelRoot !== null;
+    const savedCamera = isSameModel && this.camera ? {
+      alpha:  this.camera.alpha,
+      beta:   this.camera.beta,
+      radius: this.camera.radius,
+      target: this.camera.target.clone()
+    } : null;
+
     this.currentFloorModel = modelName;
     this.currentBuilding = buildingId;
 
@@ -306,6 +316,15 @@ export class BabylonSceneService implements OnDestroy {
           this.camera.beta = Math.PI / 3;
           this.baseRadius = 36.4;
         }
+
+        // Si se recargó el mismo piso (ej. al seleccionar un destino), restaurar la vista anterior
+        if (savedCamera) {
+          this.camera.alpha  = savedCamera.alpha;
+          this.camera.beta   = savedCamera.beta;
+          this.camera.radius = savedCamera.radius;
+          this.camera.setTarget(savedCamera.target);
+          this.baseRadius = savedCamera.radius;
+        }
       }
     } catch (err) {
       console.error(`Error al cargar modelo 3D (${rootUrl}${modelName}):`, err);
@@ -407,6 +426,60 @@ export class BabylonSceneService implements OnDestroy {
     this.onMarkersUpdatedCb(markers);
   }
 
+  /**
+   * Inserta un punto de codo en "L" entre el último waypoint del corredor y el destino final,
+   * de modo que la flecha gire exactamente 90° en lugar de ir en diagonal a través de las paredes.
+   *
+   * Lógica:
+   *  - Se detecta el eje dominante del segmento anterior (X o Z).
+   *  - El codo se coloca alineando primero ese eje con el destino, luego el eje perpendicular.
+   *  - Solo se inserta si la desviación perpendicular es significativa (> umbral).
+   */
+  private insertElbowPoint(worldPoints: BABYLON.Vector3[]): BABYLON.Vector3[] {
+    if (worldPoints.length < 2) return worldPoints;
+
+    const THRESHOLD = 0.15; // distancia mínima para considerar un giro real
+
+    const last = worldPoints[worldPoints.length - 1];        // destino final
+    const prev = worldPoints[worldPoints.length - 2];        // último waypoint del corredor
+
+    const dx = Math.abs(last.x - prev.x);
+    const dz = Math.abs(last.z - prev.z);
+
+    // Solo insertar codo si hay desviación en ambos ejes
+    if (dx < THRESHOLD || dz < THRESHOLD) {
+      return worldPoints; // ya es un movimiento casi recto, no hace falta codo
+    }
+
+    // Determinar el eje dominante del corredor mirando el segmento anterior
+    let elbowPoint: BABYLON.Vector3;
+    if (worldPoints.length >= 3) {
+      const prevPrev = worldPoints[worldPoints.length - 3];
+      const corridorDX = Math.abs(prev.x - prevPrev.x);
+      const corridorDZ = Math.abs(prev.z - prevPrev.z);
+
+      if (corridorDZ >= corridorDX) {
+        // Corredor orientado en Z: primero avanzar en Z hasta alinearse con el destino, luego girar en X
+        elbowPoint = new BABYLON.Vector3(prev.x, prev.y, last.z);
+      } else {
+        // Corredor orientado en X: primero avanzar en X hasta alinearse con el destino, luego girar en Z
+        elbowPoint = new BABYLON.Vector3(last.x, prev.y, prev.z);
+      }
+    } else {
+      // Solo 2 puntos: usar el eje con mayor diferencia como eje principal del corredor
+      if (dz >= dx) {
+        elbowPoint = new BABYLON.Vector3(prev.x, prev.y, last.z);
+      } else {
+        elbowPoint = new BABYLON.Vector3(last.x, prev.y, prev.z);
+      }
+    }
+
+    // Insertar el codo antes del destino final
+    const result = [...worldPoints];
+    result.splice(result.length - 1, 0, elbowPoint);
+    return result;
+  }
+
   public drawAnimatedRoute(points: BABYLON.Vector3[]): void {
     if (!this.scene || points.length < 2) return;
     this.clearGuideArrows();
@@ -418,11 +491,14 @@ export class BabylonSceneService implements OnDestroy {
     // Se iguala la Y de todos los waypoints intermedios a un valor sobre el suelo para
     // que la línea no atraviese el modelo.
     const floorY = Math.max(points[points.length - 1].y, 0.5);
-    const worldPoints: BABYLON.Vector3[] = points.map((p, i) =>
+    const leveledPoints: BABYLON.Vector3[] = points.map((p, i) =>
       i === points.length - 1
-        ? p.clone()                                             // destino: respetar su Y real
-        : new BABYLON.Vector3(p.x, floorY, p.z)               // waypoints intermedios: nivelados
+        ? p.clone()                                            // destino: respetar su Y real
+        : new BABYLON.Vector3(p.x, floorY, p.z)              // waypoints intermedios: nivelados
     );
+
+    // Insertar punto de codo en L antes del destino para evitar diagonales que cruzan paredes
+    const worldPoints = this.insertElbowPoint(leveledPoints);
 
     const totalSegments = worldPoints.length - 1;
 

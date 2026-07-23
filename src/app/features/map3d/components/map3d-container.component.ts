@@ -198,8 +198,9 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     }
 
     this.subscriptions.add(
-      this.mapNavService.currentBuilding$.subscribe(building => {
-        this.currentBuilding = building;
+      this.mapNavService.destinations$.subscribe(dests => {
+        this.destinations = dests;
+        console.log('DESTINATIONS CARGADOS:', dests.length, dests);
         this.cd.detectChanges();
       })
     );
@@ -221,21 +222,72 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
     );
 
     this.mapNavService.loadDestinations();
-  }
 
+    setTimeout(async () => {
+      const locs = await (this.mapNavService as any).firebaseService.getLocacionesDeTodosLosEdificios();
+      const cuerpo9Segundo = locs.filter((l: any) => {
+        const cuerpo = l.Cuerpo ?? l.cuerpo;
+        const piso = (l.Piso ?? l.piso ?? '').toString().toLowerCase();
+        return (cuerpo === 9 || cuerpo === '9') && piso.includes('2');
+      });
+      console.log('CUERPO 9 PISO 2 ENCONTRADO:', cuerpo9Segundo);
+    }, 3000);
+  }
   onMarkersUpdated(markers: ScreenMarker[]): void {
     this.screenMarkers = markers;
     this.cd.detectChanges();
   }
 
-  onMarkerClicked(marker: ScreenMarker): void {
+ onMarkerClicked(marker: ScreenMarker): void {
     if (marker.type === 'building-b') {
-      this.onBuildingSelected('B');
+      this.goToBuildingBSameFloor();
     } else if (marker.type === 'building-a') {
-      this.onBuildingSelected('A');
+      this.goToBuildingASameFloor();
     } else if (marker.type === 'sede') {
       this.onBuildingSelected('S');
     }
+  }
+
+  private getCurrentFloorNumber(): 'first' | 'second' | 'third' {
+    if (this.currentFloor === this.secondFloorModel || this.currentFloor === this.buildingBSecondFloorModel) {
+      return 'second';
+    }
+    if (this.currentFloor === this.thirdFloorModel || this.currentFloor === this.buildingBThirdFloorModel) {
+      return 'third';
+    }
+    return 'first';
+  }
+  public getFloorColorClass(): string {
+    const floorKey = this.getCurrentFloorNumber();
+    if (floorKey === 'second') return 'floor-color-second';
+    if (floorKey === 'third') return 'floor-color-third';
+    return '';
+  }
+
+  private goToBuildingBSameFloor(): void {
+    const floorKey = this.getCurrentFloorNumber();
+    this.currentBuilding = 'B';
+    const targetFloor = floorKey === 'second'
+      ? this.buildingBSecondFloorModel
+      : floorKey === 'third'
+        ? this.buildingBThirdFloorModel
+        : this.buildingBFirstFloorModel;
+    this.currentFloor = targetFloor;
+    this.mapNavService.setBuilding('B');
+    this.mapNavService.setFloor(targetFloor);
+  }
+
+  private goToBuildingASameFloor(): void {
+    const floorKey = this.getCurrentFloorNumber();
+    this.currentBuilding = 'A';
+    const targetFloor = floorKey === 'second'
+      ? this.secondFloorModel
+      : floorKey === 'third'
+        ? this.thirdFloorModel
+        : this.firstFloorModel;
+    this.currentFloor = targetFloor;
+    this.mapNavService.setBuilding('A');
+    this.mapNavService.setFloor(targetFloor);
   }
 async onMeshPicked(meshName: string, pickResult?: any): Promise<void> {
     try {
@@ -267,6 +319,7 @@ async onMeshPicked(meshName: string, pickResult?: any): Promise<void> {
       this.focusOnMeshIfNeeded(meshName);
 
       const info = await this.mapNavService.getLocationInfoByMeshNameAsync(normalizedMeshName);
+
       if (info) {
         this.selectedLocationInfo = info;
         this.isDetailPanelOpen = true;
@@ -288,22 +341,46 @@ async onMeshPicked(meshName: string, pickResult?: any): Promise<void> {
       ? baseNameMatch[0].toLowerCase()
       : (meshName || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
 
-    const focusableBodies = ['cuerpo1', 'cuerpo2', 'cuerpo3', 'cuerpo4', 'cuerpo5', 'cuerpo6', 'cuerpo7', 'cuerpo9', 'cuerpo10', 'cuerpo11', 'cuerpo12', 'cuerpo13', 'cuerpo15', 'cuerpo16', 'cuerpo17', 'cuerpo18', 'cuerpo20', 'cuerpo24', 'cuerpo26', 'cuerpo27', 'cuerpo28', 'cuerpo29', 'cuerpo30'];
-    const shouldFocus = this.currentBuilding === 'A'
-      && this.currentFloor === this.firstFloorModel
-      && focusableBodies.includes(normalizedMeshName);
+    const firstFloorBodies = ['cuerpo1', 'cuerpo2', 'cuerpo3', 'cuerpo4', 'cuerpo5', 'cuerpo6', 'cuerpo7', 'cuerpo9', 'cuerpo10', 'cuerpo11', 'cuerpo12', 'cuerpo13', 'cuerpo15', 'cuerpo16', 'cuerpo17', 'cuerpo18', 'cuerpo20', 'cuerpo24', 'cuerpo26', 'cuerpo27', 'cuerpo28', 'cuerpo29', 'cuerpo30'];
+    const buildingBFirstFloorBodies = ['cuerpo79', 'cuerpo77', 'cuerpo76', 'cuerpo78'];
+    const secondFloorBodies = ['cuerpo22', 'cuerpo21', 'cuerpo20', 'cuerpo6', 'cuerpo13', 'cuerpo15', 'cuerpo17', 'cuerpo19', 'cuerpo12', 'cuerpo10', 'cuerpo7', 'cuerpo9', 'cuerpo14', 'cuerpo16', 'cuerpo11', 'cuerpo5', 'cuerpo18', 'cuerpo3', 'cuerpo29', 'cuerpo2', 'cuerpo4', 'cuerpo1'];
+    const thirdFloorBodies = ['cuerpo13', 'cuerpo2', 'cuerpo70', 'cuerpo68', 'cuerpo11', 'cuerpo1', 'cuerpo12', 'cuerpo23', 'cuerpo55', 'cuerpo5', 'cuerpo7', 'cuerpo21', 'cuerpo14', 'cuerpo3', 'cuerpo75', 'cuerpo79', 'cuerpo15', 'cuerpo4', 'cuerpo8', 'cuerpo40', 'cuerpo18', 'cuerpo46', 'cuerpo9', 'cuerpo20', 'cuerpo22', 'cuerpo10'];
 
-    console.log('focusOnMeshIfNeeded -> shouldFocus:', shouldFocus, '| normalizedMeshName:', normalizedMeshName, '| babylonSceneService existe:', !!this.babylonSceneService);
+    const isFirstFloor = this.currentFloor === this.firstFloorModel || this.currentFloor === this.buildingBFirstFloorModel;
+    const isSecondFloor = this.currentFloor === this.secondFloorModel || this.currentFloor === this.buildingBSecondFloorModel;
+    const isThirdFloor = this.currentFloor === this.thirdFloorModel || this.currentFloor === this.buildingBThirdFloorModel;
+
+    const shouldFocus = (
+      (this.currentBuilding === 'A' && isFirstFloor && firstFloorBodies.includes(normalizedMeshName)) ||
+      (this.currentBuilding === 'B' && this.currentFloor === this.buildingBFirstFloorModel && buildingBFirstFloorBodies.includes(normalizedMeshName)) ||
+      (isSecondFloor && secondFloorBodies.includes(normalizedMeshName)) ||
+      (this.currentBuilding === 'B' && this.currentFloor === this.buildingBThirdFloorModel && /^cuerpo/i.test(normalizedMeshName)) ||
+      (isThirdFloor && thirdFloorBodies.includes(normalizedMeshName))
+    );
 
     if (!shouldFocus) {
       return;
     }
 
-    const flippedBodies = ['cuerpo3', 'cuerpo7', 'cuerpo18', 'cuerpo15', 'cuerpo4', 'cuerpo6', 'cuerpo17', 'cuerpo16', 'cuerpo5'];
-    const shouldFlip = flippedBodies.includes(normalizedMeshName);
-    this.babylonSceneService.focusOnMesh(meshName, 9, 1800, shouldFlip);
-  }
+    const flippedBodiesFirstFloor = ['cuerpo3', 'cuerpo7', 'cuerpo18', 'cuerpo15', 'cuerpo4', 'cuerpo6',
+    'cuerpo17', 'cuerpo16', 'cuerpo5', 'cuerpo79', 'cuerpo77', 'cuerpo76', 'cuerpo78']; // sin cambios, piso 1 funciona bien; B piso 1 internos
 
+    const flippedBodiesSecondFloor = ['cuerpo2', 'cuerpo4', 'cuerpo1', 'cuerpo3', 'cuerpo5', 'cuerpo16', 'cuerpo9', 'cuerpo19', 'cuerpo10', 'cuerpo17', 'cuerpo15', 'cuerpo20', 'cuerpo21', 'cuerpo22'];
+    const flippedBodiesThirdFloor = ['cuerpo40', 'cuerpo72', 'cuerpo4', 'cuerpo3', 'cuerpo67', 'cuerpo68',
+    'cuerpo57', 'cuerpo59'];
+
+    const shouldFlip =
+    (isFirstFloor && flippedBodiesFirstFloor.includes(normalizedMeshName)) ||
+    (isSecondFloor && flippedBodiesSecondFloor.includes(normalizedMeshName)) ||
+    (this.currentBuilding === 'B' && this.currentFloor === this.buildingBThirdFloorModel && /^cuerpo/i.test(normalizedMeshName)) ||
+    (isThirdFloor && flippedBodiesThirdFloor.includes(normalizedMeshName));
+
+    const baseAlphaSecondFloor = Math.PI / 2;
+    const baseAlphaThirdFloor = Math.PI / 2;
+    const currentBaseAlpha = isSecondFloor ? baseAlphaSecondFloor : (isThirdFloor ? baseAlphaThirdFloor : Math.PI / 2);
+
+    this.babylonSceneService.focusOnMesh(meshName, 9, 1800, shouldFlip, currentBaseAlpha);
+  }
   private animateCameraFocus(targetVector: BABYLON.Vector3, targetOrthoSize: number, durationMs = 700): void {
     if (!this.camera) return;
 
@@ -456,7 +533,7 @@ async onMeshPicked(meshName: string, pickResult?: any): Promise<void> {
     }
 
     if (this.currentBuilding === 'B' && this.currentFloor === this.buildingBFirstFloorModel) {
-      return ['cuerpo0'].includes(normalizedMeshName);
+      return ['cuerpo0', 'cuerpo97'].includes(normalizedMeshName);
     }
 
     return false;
@@ -1006,7 +1083,7 @@ async onMeshPicked(meshName: string, pickResult?: any): Promise<void> {
           }
           const excludedFirstFloorDetailBodies = ['cuerpo14', 'cuerpo21', 'cuerpo19', 'cuerpo25', 'cuerpo45'];
           const excludedSecondFloorDetailBodies = ['cuerpo23', 'cuerpo8', 'cuerpo25', 'cuerpo30', 'cuerpo41'];
-          const excludedBuildingBFirstFloorDetailBodies = ['cuerpo0'];
+          const excludedBuildingBFirstFloorDetailBodies = ['cuerpo0', 'cuerpo97'];
           const excludedBuildingBSecondFloorDetailBodies = ['cuerpo0'];
           const excludedBuildingBThirdFloorDetailBodies = ['cuerpo0'];
           const isFirstFloorBodyDetailTrigger = (this.currentFloor === this.firstFloorModel || this.currentFloor === this.buildingBFirstFloorModel)

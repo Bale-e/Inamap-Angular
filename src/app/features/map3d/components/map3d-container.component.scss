@@ -70,3 +70,26 @@
     }
   }
 }
+.screen-marker-badge.floor-color-second {
+  &.marker-building {
+    border-color: rgba(76, 175, 80, 0.6);
+    color: #81c784;
+
+    &:hover {
+      background: #4caf50;
+      color: #ffffff;
+    }
+  }
+}
+
+.screen-marker-badge.floor-color-third {
+  &.marker-building {
+    border-color: rgba(216, 27, 196, 0.6);
+    color: #e879d8;
+
+    &:hover {
+      background: #d81bc4;
+      color: #ffffff;
+    }
+  }
+}

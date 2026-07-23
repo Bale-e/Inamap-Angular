@@ -94,6 +94,27 @@ export class MapNavigationService {
       return null;
     }
 
+    if (this.currentBuildingSubject.value === 'B' && isThirdFloor) {
+      const bThirdFloorOverrides: Record<string, SelectedLocationInfo> = {
+        cuerpo1: { nombre: 'Sala B304', desc: 'Espacio académico del Edificio B, piso 3.' },
+        cuerpo2: { nombre: 'Sala B303', desc: 'Espacio académico del Edificio B, piso 3.' },
+        cuerpo3: { nombre: 'Sala B305', desc: 'Espacio académico del Edificio B, piso 3.' },
+        cuerpo4: { nombre: 'Sala B306', desc: 'Espacio académico del Edificio B, piso 3.' },
+        cuerpo5: { nombre: 'Sala B302', desc: 'Espacio académico del Edificio B, piso 3.' },
+        cuerpo6: { nombre: 'Sala B307', desc: 'Espacio académico del Edificio B, piso 3.' },
+        cuerpo7: { nombre: 'Sala B308', desc: 'Espacio académico del Edificio B, piso 3.' },
+        cuerpo8: { nombre: 'Sala B301', desc: 'Espacio académico del Edificio B, piso 3.' }
+      };
+      const bOverride = bThirdFloorOverrides[normalizedMeshName];
+      if (bOverride) {
+        return bOverride;
+      }
+    }
+
+    if (this.currentBuildingSubject.value === 'B' && normalizedMeshName === 'cuerpo7' && isSecondFloor) {
+      return { nombre: 'Sala B308', desc: 'Espacio académico del Edificio B, piso 2.' };
+    }
+
     if (isThirdFloor) {
       return override.thirdFloor ?? null;
     }

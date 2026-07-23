@@ -63,12 +63,14 @@ export class BabylonSceneService implements OnDestroy {
     this.scene.clearColor = new BABYLON.Color4(0.06, 0.08, 0.12, 1);
 
     this.setupCamera(canvas);
+    (window as any).__cam = this.camera; // TEMPORAL, solo para calibrar — borrar después
     this.setupLights();
     this.setupSkybox();
 
     this.scene.onPointerDown = (evt, pickResult) => {
       this.registerUserInteraction();
       if (evt.button === 0 && pickResult.hit && pickResult.pickedMesh) {
+        console.log('Mesh seleccionado:', pickResult.pickedMesh.name, 'Coordenadas:', pickResult.pickedPoint);
         if (onMeshClicked) {
           onMeshClicked(pickResult.pickedMesh.name, pickResult);
         }
@@ -213,7 +215,7 @@ export class BabylonSceneService implements OnDestroy {
 
     const isSede = buildingId === 'S' || modelName === 'MODELO_INACAP_FIXED.obj';
     const isBuildingB = buildingId === 'B' || modelName.includes('Edificio B');
-    
+
     const rootUrl = isSede
       ? '/assets/3d-models/sede/'
       : isBuildingB
@@ -340,7 +342,7 @@ export class BabylonSceneService implements OnDestroy {
     const transformMatrix = viewMatrix.multiply(projectionMatrix);
     const viewport = new BABYLON.Viewport(0, 0, this.engine.getRenderWidth(), this.engine.getRenderHeight());
 
-    // Proyecta un punto local, ajustando su Y al suelo real mediante raycast hacia abajo
+    // Proyecta un punto LOCAL (antes de aplicar la rotación del modelRoot), ajustando su Y al suelo real
     const projectPointOnGround = (
       localX: number,
       localZ: number,
@@ -384,9 +386,47 @@ export class BabylonSceneService implements OnDestroy {
       return { x: screenCoords.x, y: screenCoords.y, visible: isVisible };
     };
 
+    // Proyecta un punto que YA está en espacio de mundo (ej. coordenadas capturadas por clic)
+    const projectWorldPointOnGround = (
+      worldX: number,
+      worldZ: number,
+      heightOffset = 0.05
+    ): { x: number; y: number; visible: boolean } => {
+      let groundY = 0;
+      try {
+        const rayOrigin = new BABYLON.Vector3(worldX, 50, worldZ);
+        const ray = new BABYLON.Ray(rayOrigin, BABYLON.Vector3.Down(), 200);
+        const pickInfo = this.scene ? this.scene.pickWithRay(ray) : null;
+        if (pickInfo && pickInfo.hit && pickInfo.pickedPoint) {
+          groundY = pickInfo.pickedPoint.y;
+        }
+      } catch (e) {
+        // si falla el raycast, mantener groundY en 0
+      }
+
+      const adjustedWorldPos = new BABYLON.Vector3(worldX, groundY + heightOffset, worldZ);
+
+      const screenCoords = BABYLON.Vector3.Project(
+        adjustedWorldPos,
+        BABYLON.Matrix.Identity(),
+        transformMatrix,
+        viewport
+      );
+
+      const isVisible =
+        screenCoords.z > 0 &&
+        screenCoords.z < 1 &&
+        screenCoords.x > 0 &&
+        screenCoords.x < this.engine!.getRenderWidth() &&
+        screenCoords.y > 0 &&
+        screenCoords.y < this.engine!.getRenderHeight();
+
+      return { x: screenCoords.x, y: screenCoords.y, visible: isVisible };
+    };
+
     // Marcador Edificio B (desde Edificio A)
     if (this.currentBuilding === 'A') {
-      const proj = projectPointOnGround(11.07, 1.13);
+      const proj = projectWorldPointOnGround(11.375700555221513, -0.02395946437413432);
       markers.push({
         id: 'marker-building-b',
         label: '→ Ir al Edificio B',
@@ -397,8 +437,7 @@ export class BabylonSceneService implements OnDestroy {
       });
 
       if (this.currentFloorModel.includes('Piso 1')) {
-        // Usar X/Z de Cuerpo45 como referencia, apoyada en el suelo real
-        const proj2 = projectPointOnGround(0.9066183246636239, 6.24408551363563);
+        const proj2 = projectWorldPointOnGround(-9.697827490499874, -0.2551487650904001);
         markers.push({
           id: 'marker-sede',
           label: '→ Ir al mapa principal',
@@ -411,8 +450,8 @@ export class BabylonSceneService implements OnDestroy {
     }
 
     // Marcador Edificio A (desde Edificio B)
-    if (this.currentBuilding === 'B') {
-      const proj = projectPointOnGround(-0.55, 11.23);
+    if (this.currentBuilding === 'B' && !this.currentFloorModel.includes('Piso 3')) {
+      const proj = projectWorldPointOnGround(-5.336930000984566, -1.9430948868138938);
       markers.push({
         id: 'marker-building-a',
         label: '← Volver al Edificio A',
@@ -609,7 +648,23 @@ export class BabylonSceneService implements OnDestroy {
     }) ?? null;
   }
 
-  public focusOnMesh(meshName: string, targetRadius = 6, durationMs = 700, flipAngle = false): void {
+  /**
+   * Determina de qué lado del eje central está un cuerpo, comparando su posición
+   * world contra el centro del modelo (que ya está normalizado a x=0 / z=0 en loadModel).
+   * Devuelve 1 o -1 según el lado. Útil para inferir automáticamente hacia dónde
+   * "mira" el cuerpo sin mantener listas manuales.
+   */
+  public getMeshFacingSide(meshName: string, axis: 'x' | 'z' = 'x'): number | null {
+    const mesh = this.getMeshByName(meshName);
+    if (!mesh) return null;
+    mesh.computeWorldMatrix(true);
+    mesh.refreshBoundingInfo({});
+    const center = mesh.getBoundingInfo().boundingBox.centerWorld;
+    const value = axis === 'x' ? center.x : center.z;
+    return value >= 0 ? 1 : -1;
+  }
+
+  public focusOnMesh(meshName: string, targetRadius = 6, durationMs = 700, flipAngle = false, baseAlpha = Math.PI / 2): void {
     if (!this.camera || !this.scene) return;
 
     const targetMesh = this.scene.getMeshByName(meshName);
@@ -621,7 +676,6 @@ export class BabylonSceneService implements OnDestroy {
     const targetPosition = boundingInfo.boundingBox.centerWorld.clone();
 
     // Ángulo fijo tipo "vista desde dentro" para todos los cuerpos
-    const baseAlpha = Math.PI / 2; // usa aquí el valor que ya confirmaste que funciona
     const targetAlpha = flipAngle ? baseAlpha + Math.PI : baseAlpha;
     const targetBeta = Math.PI / 2 - 0.6; // casi horizontal, mirando hacia el frente
 

@@ -102,6 +102,8 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       zoomIn: () => {},
       zoomOut: () => {},
       resetCamera: () => {},
+      focusOnMesh: () => {},
+      getMeshByName: () => null,
       dispose: () => {}
     } as unknown as BabylonSceneService;
 
@@ -237,30 +239,29 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   async onMeshPicked(meshName: string): Promise<void> {
-    // Si este mesh es un disparador del selector de piso (ej. escaleras),
-    // abrir el selector de piso y no mostrar el panel de detalle de ubicación.
-    if (this.isFloorSelectionTrigger(meshName)) {
-      this.floorSelectorComponent?.openDialog();
-      this.closeDetailPanel();
-      if (this.infoBox) this.infoBox.style.display = 'none';
-      return;
-    }
+    console.log('onMeshPicked INICIO ->', meshName);
+    try {
+      // Si este mesh es un disparador del selector de piso (ej. escaleras),
+      // abrir el selector de piso y no mostrar el panel de detalle de ubicación.
+      if (this.isFloorSelectionTrigger(meshName)) {
+        this.floorSelectorComponent?.openDialog();
+        this.closeDetailPanel();
+        if (this.infoBox) this.infoBox.style.display = 'none';
+        return;
+      }
 
-    const normalizedMeshName = meshName.replace(/[^a-z0-9]/gi, '').toLowerCase();
-    if (/^cuerpo\d+/.test(normalizedMeshName)) {
-      // No mostrar panel de detalle para clics en cuerpos.
-      this.closeDetailPanel();
-      if (this.infoBox) this.infoBox.style.display = 'none';
-      return;
-    }
+      const normalizedMeshName = meshName.replace(/[^a-z0-9]/gi, '').toLowerCase();
+      console.log('onMeshPicked -> llamando focusOnMeshIfNeeded con:', meshName);
+      this.focusOnMeshIfNeeded(meshName);
 
-    this.focusOnMeshIfNeeded(meshName);
-
-    const info = await this.mapNavService.getLocationInfoByMeshNameAsync(normalizedMeshName);
-    if (info) {
-      this.selectedLocationInfo = info;
-      this.isDetailPanelOpen = true;
-      this.cd.detectChanges();
+      const info = await this.mapNavService.getLocationInfoByMeshNameAsync(normalizedMeshName);
+      if (info) {
+        this.selectedLocationInfo = info;
+        this.isDetailPanelOpen = true;
+        this.cd.detectChanges();
+      }
+    } catch (err) {
+      console.error('ERROR en onMeshPicked:', err);
     }
   }
 
@@ -272,16 +273,20 @@ export class Map3dContainerComponent implements AfterViewInit, OnDestroy {
       ? baseNameMatch[0].toLowerCase()
       : (meshName || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
 
-    const focusableBodies = ['cuerpo1', 'cuerpo2', 'cuerpo3', 'cuerpo4','cuerpo5', 'cuerpo6', 'cuerpo7','cuerpo9', 'cuerpo10', 'cuerpo11', 'cuerpo12', 'cuerpo13', 'cuerpo15','cuerpo16', 'cuerpo17', 'cuerpo18','cuerpo20', 'cuerpo24', 'cuerpo26', 'cuerpo27', 'cuerpo28', 'cuerpo29', 'cuerpo30'];
+    const focusableBodies = ['cuerpo1', 'cuerpo2', 'cuerpo3', 'cuerpo4', 'cuerpo5', 'cuerpo6', 'cuerpo7', 'cuerpo9', 'cuerpo10', 'cuerpo11', 'cuerpo12', 'cuerpo13', 'cuerpo15', 'cuerpo16', 'cuerpo17', 'cuerpo18', 'cuerpo20', 'cuerpo24', 'cuerpo26', 'cuerpo27', 'cuerpo28', 'cuerpo29', 'cuerpo30'];
     const shouldFocus = this.currentBuilding === 'A'
       && this.currentFloor === this.firstFloorModel
       && focusableBodies.includes(normalizedMeshName);
+
+    console.log('focusOnMeshIfNeeded -> shouldFocus:', shouldFocus, '| normalizedMeshName:', normalizedMeshName, '| babylonSceneService existe:', !!this.babylonSceneService);
 
     if (!shouldFocus) {
       return;
     }
 
-    this.babylonSceneService.focusOnMesh(meshName, 30);
+    const flippedBodies = ['cuerpo3', 'cuerpo7', 'cuerpo18', 'cuerpo15', 'cuerpo4', 'cuerpo6', 'cuerpo17', 'cuerpo16', 'cuerpo5'];
+    const shouldFlip = flippedBodies.includes(normalizedMeshName);
+    this.babylonSceneService.focusOnMesh(meshName, 18, 1800, shouldFlip);
   }
 
   private animateCameraFocus(targetVector: BABYLON.Vector3, targetOrthoSize: number, durationMs = 700): void {

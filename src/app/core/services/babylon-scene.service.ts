@@ -388,7 +388,21 @@ export class BabylonSceneService implements OnDestroy {
     this.camera.radius = this.currentBuilding === 'A' ? 52 : 25;
   }
 
-  public focusOnMesh(meshName: string, targetRadius = 6, durationMs = 700): void {
+  public getMeshByName(meshName: string): BABYLON.AbstractMesh | null {
+    if (!this.scene) return null;
+
+    let mesh = this.scene.getMeshByName(meshName);
+    if (mesh) return mesh;
+
+    const normalizedMeshName = (meshName || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    return this.scene.meshes.find((candidate) => {
+      const meshNameCandidate = (candidate.name || '').toLowerCase();
+      const normalizedCandidate = meshNameCandidate.replace(/[^a-z0-9]/gi, '');
+      return meshNameCandidate === normalizedMeshName || normalizedCandidate === normalizedMeshName;
+    }) ?? null;
+  }
+
+  public focusOnMesh(meshName: string, targetRadius = 6, durationMs = 700, flipAngle = false): void {
     if (!this.camera || !this.scene) return;
 
     const targetMesh = this.scene.getMeshByName(meshName);
@@ -399,8 +413,15 @@ export class BabylonSceneService implements OnDestroy {
     const boundingInfo = targetMesh.getBoundingInfo();
     const targetPosition = boundingInfo.boundingBox.centerWorld.clone();
 
+    // Ángulo fijo tipo "vista desde dentro" para todos los cuerpos
+    const baseAlpha = Math.PI / 2; // usa aquí el valor que ya confirmaste que funciona
+    const targetAlpha = flipAngle ? baseAlpha + Math.PI : baseAlpha;
+    const targetBeta = Math.PI / 2 - 0.45; // casi horizontal, mirando hacia el frente
+
     const startTarget = this.camera.target.clone();
     const startRadius = this.camera.radius;
+    const startAlpha = this.camera.alpha;
+    const startBeta = this.camera.beta;
     const startTime = performance.now();
 
     const animateStep = () => {
@@ -412,6 +433,12 @@ export class BabylonSceneService implements OnDestroy {
       const newTarget = BABYLON.Vector3.Lerp(startTarget, targetPosition, eased);
       this.camera.target = newTarget;
       this.camera.radius = startRadius + (targetRadius - startRadius) * eased;
+      this.camera.alpha = startAlpha + (targetAlpha - startAlpha) * eased;
+      this.camera.beta = startBeta + (targetBeta - startBeta) * eased;
+
+      if (t < 1) {
+        requestAnimationFrame(animateStep);
+      }
     };
 
     requestAnimationFrame(animateStep);
